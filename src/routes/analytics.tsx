@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { UtilityWorkspace } from "@/components/workspaces";
+export const Route = createFileRoute("/analytics")({ head: () => ({ meta: [{ title: "Analytics — AIIA TrialShield" }, { name: "description", content: "Contextual clinical research intelligence." }, { property: "og:title", content: "Analytics — AIIA TrialShield" }, { property: "og:description", content: "Contextual clinical research intelligence." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: () => <UtilityWorkspace type="analytics" /> });

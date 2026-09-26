@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { ComplianceWorkspace } from "@/components/workspaces";
+export const Route = createFileRoute("/compliance")({ head: () => ({ meta: [{ title: "Compliance — AIIA TrialShield" }, { name: "description", content: "Ethics, CTRI and audit readiness center." }, { property: "og:title", content: "Compliance — AIIA TrialShield" }, { property: "og:description", content: "Ethics, CTRI and audit readiness center." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: ComplianceWorkspace });

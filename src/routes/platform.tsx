@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { PortfolioWorkspace } from "@/components/portfolio";
+export const Route = createFileRoute("/platform")({ head: () => ({ meta: [{ title: "Portfolio — AIIA TrialShield" }, { name: "description", content: "Clinical research portfolio command center." }, { property: "og:title", content: "Portfolio — AIIA TrialShield" }, { property: "og:description", content: "Clinical research portfolio command center." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: PortfolioWorkspace });
