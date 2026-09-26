@@ -10,33 +10,128 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as ComplianceRouteImport } from './routes/compliance'
+import { Route as DocumentsRouteImport } from './routes/documents'
+import { Route as ExportsRouteImport } from './routes/exports'
+import { Route as PlatformRouteImport } from './routes/platform'
+import { Route as SafetyRouteImport } from './routes/safety'
+import { Route as StudiesRouteImport } from './routes/studies'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComplianceRoute = ComplianceRouteImport.update({
+  id: '/compliance',
+  path: '/compliance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocumentsRoute = DocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExportsRoute = ExportsRouteImport.update({
+  id: '/exports',
+  path: '/exports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformRoute = PlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SafetyRoute = SafetyRouteImport.update({
+  id: '/safety',
+  path: '/safety',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudiesRoute = StudiesRouteImport.update({
+  id: '/studies',
+  path: '/studies',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/compliance': typeof ComplianceRoute
+  '/documents': typeof DocumentsRoute
+  '/exports': typeof ExportsRoute
+  '/platform': typeof PlatformRoute
+  '/safety': typeof SafetyRoute
+  '/studies': typeof StudiesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/compliance': typeof ComplianceRoute
+  '/documents': typeof DocumentsRoute
+  '/exports': typeof ExportsRoute
+  '/platform': typeof PlatformRoute
+  '/safety': typeof SafetyRoute
+  '/studies': typeof StudiesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/compliance': typeof ComplianceRoute
+  '/documents': typeof DocumentsRoute
+  '/exports': typeof ExportsRoute
+  '/platform': typeof PlatformRoute
+  '/safety': typeof SafetyRoute
+  '/studies': typeof StudiesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/analytics'
+    | '/compliance'
+    | '/documents'
+    | '/exports'
+    | '/platform'
+    | '/safety'
+    | '/studies'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/analytics'
+    | '/compliance'
+    | '/documents'
+    | '/exports'
+    | '/platform'
+    | '/safety'
+    | '/studies'
+  id:
+    | '__root__'
+    | '/'
+    | '/analytics'
+    | '/compliance'
+    | '/documents'
+    | '/exports'
+    | '/platform'
+    | '/safety'
+    | '/studies'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnalyticsRoute: typeof AnalyticsRoute
+  ComplianceRoute: typeof ComplianceRoute
+  DocumentsRoute: typeof DocumentsRoute
+  ExportsRoute: typeof ExportsRoute
+  PlatformRoute: typeof PlatformRoute
+  SafetyRoute: typeof SafetyRoute
+  StudiesRoute: typeof StudiesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +143,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compliance': {
+      id: '/compliance'
+      path: '/compliance'
+      fullPath: '/compliance'
+      preLoaderRoute: typeof ComplianceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/documents': {
+      id: '/documents'
+      path: '/documents'
+      fullPath: '/documents'
+      preLoaderRoute: typeof DocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exports': {
+      id: '/exports'
+      path: '/exports'
+      fullPath: '/exports'
+      preLoaderRoute: typeof ExportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform': {
+      id: '/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof PlatformRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/safety': {
+      id: '/safety'
+      path: '/safety'
+      fullPath: '/safety'
+      preLoaderRoute: typeof SafetyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studies': {
+      id: '/studies'
+      path: '/studies'
+      fullPath: '/studies'
+      preLoaderRoute: typeof StudiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnalyticsRoute: AnalyticsRoute,
+  ComplianceRoute: ComplianceRoute,
+  DocumentsRoute: DocumentsRoute,
+  ExportsRoute: ExportsRoute,
+  PlatformRoute: PlatformRoute,
+  SafetyRoute: SafetyRoute,
+  StudiesRoute: StudiesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
