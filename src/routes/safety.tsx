@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { SafetyWorkspace } from "@/components/workspaces";
+export const Route = createFileRoute("/safety")({ head: () => ({ meta: [{ title: "Safety — AIIA TrialShield" }, { name: "description", content: "Pharmacovigilance investigation and SAE monitoring." }, { property: "og:title", content: "Safety — AIIA TrialShield" }, { property: "og:description", content: "Pharmacovigilance investigation and SAE monitoring." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: SafetyWorkspace });
