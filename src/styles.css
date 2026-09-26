@@ -19,6 +19,8 @@
  */
 
 @theme inline {
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -59,29 +61,39 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-surface: var(--surface);
+  --color-positive: var(--positive);
+  --color-risk: var(--risk);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --radius: 0.5rem;
+  --background: oklch(0.973 0.011 86.7);
+  --foreground: oklch(0.262 0.047 160.8);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.311 0.064 161.8);
+  --primary-foreground: oklch(0.98 0.008 88);
+  --secondary: oklch(0.474 0.105 159.1);
+  --secondary-foreground: oklch(0.99 0.004 90);
+  --muted: oklch(0.943 0.014 86.3);
+  --muted-foreground: oklch(0.489 0.029 159.7);
+  --accent: oklch(0.737 0.079 61.6);
+  --accent-foreground: oklch(0.25 0.035 68);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --border: oklch(0.884 0.021 85.7);
+  --input: oklch(0.884 0.021 85.7);
+  --ring: oklch(0.474 0.105 159.1);
+  --surface: oklch(1 0 0);
+  --positive: oklch(0.47 0.105 159.1);
+  --risk: oklch(0.56 0.17 29);
+  --warning: oklch(0.78 0.13 75);
+  --warning-foreground: oklch(0.39 0.08 59);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -140,5 +152,26 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    letter-spacing: 0;
+    text-rendering: optimizeLegibility;
   }
+
+  ::selection { background: color-mix(in oklab, var(--secondary) 22%, transparent); }
+}
+
+@keyframes reveal-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scan { 0%, 100% { opacity: .28; } 50% { opacity: .58; } }
+
+@utility animate-fade-in { animation: reveal-up .45s cubic-bezier(.22,.8,.34,1) both; }
+@utility manuscript-grid {
+  background-image: linear-gradient(to right, color-mix(in oklab, var(--primary) 5%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in oklab, var(--primary) 5%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+@utility botanical-field {
+  background-image: radial-gradient(ellipse at 80% 20%, color-mix(in oklab, var(--secondary) 10%, transparent), transparent 38%), linear-gradient(120deg, transparent 0 64%, color-mix(in oklab, var(--accent) 8%, transparent) 64% 65%, transparent 65%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
