@@ -63,8 +63,8 @@ export function PlatformHeader() {
           })}
         </nav>
         <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="icon" aria-label="Search"><Search className="size-4" /></Button>
-          <Button variant="ghost" size="icon" aria-label="Notifications" className="relative"><Bell className="size-4" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-risk" /></Button>
+          <Button asChild variant="ghost" size="icon" aria-label="Search studies"><Link to="/studies"><Search className="size-4" /></Link></Button>
+          <Button asChild variant="ghost" size="icon" aria-label="Open compliance notifications" className="relative"><Link to="/compliance"><Bell className="size-4" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-risk" /></Link></Button>
           <div className="ml-2 hidden size-8 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground sm:grid">AK</div>
           <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Toggle navigation" onClick={() => setOpen((value) => !value)}>{open ? <X className="size-5" /> : <Menu className="size-5" />}</Button>
         </div>
@@ -101,7 +101,7 @@ export function ProgressBar({ value, tone = "primary" }: { value: number; tone?:
   return <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full transition-all duration-700", tone === "primary" && "bg-secondary", tone === "risk" && "bg-risk", tone === "accent" && "bg-accent")} style={{ width: `${value}%` }} /></div>;
 }
 
-export function AttentionItem({ severity, title, meta, owner, action }: { severity: "critical" | "warning" | "stable"; title: string; meta: string; owner: string; action: string }) {
+export function AttentionItem({ severity, title, meta, owner, action, onAction }: { severity: "critical" | "warning" | "stable"; title: string; meta: string; owner: string; action: string; onAction: () => void }) {
   return (
     <article className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4 border-b border-border px-1 py-5 last:border-0">
       <span className={cn("mt-1 size-2.5 rounded-full ring-4", severity === "critical" && "bg-risk ring-risk/10", severity === "warning" && "bg-warning ring-warning/10", severity === "stable" && "bg-positive ring-positive/10")} />
@@ -109,7 +109,7 @@ export function AttentionItem({ severity, title, meta, owner, action }: { severi
         <div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-sm font-semibold text-foreground">{title}</h3><span className="text-xs text-muted-foreground">{meta}</span></div>
         <p className="mt-2 text-xs text-muted-foreground">Owner <span className="font-medium text-foreground">{owner}</span></p>
       </div>
-      <Button variant="ghost" size="sm" className="group-hover:bg-muted">{action}<ChevronRight className="size-3.5" /></Button>
+      <Button variant="ghost" size="sm" className="group-hover:bg-muted" onClick={onAction}>{action}<ChevronRight className="size-3.5" /></Button>
     </article>
   );
 }
