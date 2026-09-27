@@ -17,6 +17,7 @@ import { Route as ExportsRouteImport } from './routes/exports'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as SafetyRouteImport } from './routes/safety'
 import { Route as StudiesRouteImport } from './routes/studies'
+import { Route as StudiesIndexRouteImport } from './routes/studies.index'
 import { Route as StudiesStudyIdRouteImport } from './routes/studies.$studyId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -59,6 +60,11 @@ const StudiesRoute = StudiesRouteImport.update({
   path: '/studies',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StudiesIndexRoute = StudiesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => StudiesRoute,
+} as any)
 const StudiesStudyIdRoute = StudiesStudyIdRouteImport.update({
   id: '/$studyId',
   path: '/$studyId',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/safety': typeof SafetyRoute
   '/studies': typeof StudiesRouteWithChildren
   '/studies/$studyId': typeof StudiesStudyIdRoute
+  '/studies/': typeof StudiesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,8 +91,8 @@ export interface FileRoutesByTo {
   '/exports': typeof ExportsRoute
   '/platform': typeof PlatformRoute
   '/safety': typeof SafetyRoute
-  '/studies': typeof StudiesRouteWithChildren
   '/studies/$studyId': typeof StudiesStudyIdRoute
+  '/studies': typeof StudiesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +105,7 @@ export interface FileRoutesById {
   '/safety': typeof SafetyRoute
   '/studies': typeof StudiesRouteWithChildren
   '/studies/$studyId': typeof StudiesStudyIdRoute
+  '/studies/': typeof StudiesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +119,7 @@ export interface FileRouteTypes {
     | '/safety'
     | '/studies'
     | '/studies/$studyId'
+    | '/studies/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -120,8 +129,8 @@ export interface FileRouteTypes {
     | '/exports'
     | '/platform'
     | '/safety'
-    | '/studies'
     | '/studies/$studyId'
+    | '/studies'
   id:
     | '__root__'
     | '/'
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/safety'
     | '/studies'
     | '/studies/$studyId'
+    | '/studies/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -204,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudiesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/studies/': {
+      id: '/studies/'
+      path: '/'
+      fullPath: '/studies/'
+      preLoaderRoute: typeof StudiesIndexRouteImport
+      parentRoute: typeof StudiesRoute
+    }
     '/studies/$studyId': {
       id: '/studies/$studyId'
       path: '/$studyId'
@@ -216,10 +233,12 @@ declare module '@tanstack/react-router' {
 
 interface StudiesRouteChildren {
   StudiesStudyIdRoute: typeof StudiesStudyIdRoute
+  StudiesIndexRoute: typeof StudiesIndexRoute
 }
 
 const StudiesRouteChildren: StudiesRouteChildren = {
   StudiesStudyIdRoute: StudiesStudyIdRoute,
+  StudiesIndexRoute: StudiesIndexRoute,
 }
 
 const StudiesRouteWithChildren =
