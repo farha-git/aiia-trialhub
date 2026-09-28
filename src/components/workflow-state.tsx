@@ -219,13 +219,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [risks, setRisks] = useState(initialRisks);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>(initialDocuments);
-  const [batches] = useState<InterventionBatch[]>(initialBatches);
-    useEffect(() => {
-    async function loadStudies() {
+  const [batches, setBatches] = useState<InterventionBatch[]>(initialBatches);
+  useEffect(() => {
+    async function loadWorkflowData() {
       try {
-        const data = await getStudies();
+        const [studyRows, safetyRows, riskRows, documentRows, batchRows, auditRows] = await Promise.all([
+          getStudies(),
+          supabase.from("safety_cases").select("*"),
+          supabase.from("compliance_risks").select("*"),
+          supabase.from("documents").select("*"),
+          supabase.from("intervention_batches").select("*"),
+          supabase.from("audit_events").select("*").order("created_at", { ascending: false }),
+        ]);
+        const queryErrors = [safetyRows, riskRows, documentRows, batchRows, auditRows].filter((result) => result.error);
+        const queryError = queryErrors.find((result) => result.error)?.error;
+        if (queryError) throw queryError;
 
-        const mappedStudies: WorkflowStudy[] = (data || []).map((study: any) => ({
+        const mappedStudies: WorkflowStudy[] = (studyRows || []).map((study: any) => ({
           id: study.study_code,
           title: study.title,
           phase: study.phase,
@@ -247,21 +257,56 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           rulePack: study.rule_pack ?? "academic-asu",
         }));
 
-        if (mappedStudies.length > 0) {
-          setStudies(mappedStudies);
-          setUsingOfflineData(false);
-        } else {
-          setUsingOfflineData(true);
-        }
+        setStudies(mappedStudies);
+        setSafetyCases((safetyRows.data ?? []).map((row) => ({
+          id: row.id, studyId: row.study_id, title: row.title, severity: row.severity,
+          stage: row.stage, owner: row.owner, due: row.due, onsetAt: row.onset_at,
+          awareAt: row.aware_at, reportedAt: row.reported_at, batchId: row.batch_id,
+          causality: row.causality, prakriti: row.prakriti, concomitantMeds: row.concomitant_meds,
+          interactionSuspected: row.interaction_suspected, meddraTerm: row.meddra_term,
+          namasteCode: row.namaste_code,
+        })));
+        setRisks((riskRows.data ?? []).map((row) => ({
+          id: row.id, studyId: row.study_id, title: row.title, detail: row.detail,
+          owner: row.owner, severity: row.severity, resolved: row.resolved,
+        })));
+        setDocuments((documentRows.data ?? []).map((row) => ({
+          id: row.id, studyId: row.study_id, title: row.title, version: row.version,
+          status: row.status, owner: row.owner, updatedAt: row.updated_at,
+        })));
+        setBatches((batchRows.data ?? []).map((row) => ({
+          id: row.id, studyId: row.study_id, formulation: row.formulation,
+          lotNo: row.lot_no, manufacturer: row.manufacturer, coaStatus: row.coa_status,
+          heavyMetals: row.heavy_metals, microbial: row.microbial, testedOn: row.tested_on,
+        })));
+        setAuditEntries((auditRows.data ?? []).map((row) => ({
+          id: row.id, studyId: row.study_id, action: row.action,
+          actor: row.metadata?.actor ?? "Research Operations", timestamp: row.created_at,
+          hash: row.hash, prevHash: row.prev_hash,
+        })));
+        setUsingOfflineData(false);
       } catch (error) {
-        console.error("Failed to load studies:", error);
+        console.error("Failed to load workflow data:", error);
         setUsingOfflineData(true);
       }
     }
 
-    void loadStudies();
+    void loadWorkflowData();
   }, []);
-  
+
+  const persistRequest = (description: string, request: PromiseLike<{ error: { message: string } | null }>) => {
+    void (async () => {
+      try {
+        const { error } = await request;
+        if (!error) return;
+        console.error(`Failed to save ${description}:`, error);
+        setUsingOfflineData(true);
+      } catch (error) {
+        console.error(`Failed to save ${description}:`, error);
+        setUsingOfflineData(true);
+      }
+    })();
+  };
 
   const recordAudit = (studyId: string, action: string) => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -274,6 +319,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }).catch(() => undefined);
       return [entry, ...entries];
     });
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        persistRequest("audit event", supabase.from("audit_events").insert({
+          user_id: data.user?.id ?? null,
+          study_id: studyId,
+          action,
+          resource_type: "workflow",
+          metadata: { actor: "Research Operations" },
+        }));
+      } catch (error) {
+        console.error("Failed to save audit event:", error);
+        setUsingOfflineData(true);
+      }
+    })();
   };
 
  const createStudy = async (input: NewStudy) => {
@@ -325,6 +385,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   };
 
   setStudies((items) => [...items, newStudy]);
+  persistRequest("study", supabase.from("studies").update({ rule_pack: newStudy.rulePack }).eq("study_code", data.study_code));
 
   recordAudit(data.study_code, "Draft protocol workspace created");
 
@@ -345,7 +406,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     if (study.stage === "close-out" && safetyCases.some((item) => item.studyId === studyId && item.severity === "SAE" && item.stage !== "closed")) {
       return { ok: false, message: "Close or document every open SAE before database lock." };
     }
-    setStudies((items) => items.map((item) => item.id === studyId ? { ...item, stage: next, status: stageStatus(next), activatedSites: next === "recruitment" ? Math.max(item.activatedSites, 1) : item.activatedSites, archived: next === "closed" } : item));
+    const updatedStudy = { ...study, stage: next, status: stageStatus(next), activatedSites: next === "recruitment" ? Math.max(study.activatedSites, 1) : study.activatedSites, archived: next === "closed" };
+    setStudies((items) => items.map((item) => item.id === studyId ? updatedStudy : item));
+    persistRequest("study workflow", supabase.from("studies").update({ stage: updatedStudy.stage, status: updatedStudy.status, activated_sites: updatedStudy.activatedSites, archived: updatedStudy.archived }).eq("study_code", studyId));
     recordAudit(studyId, `${stageStatus(study.stage)} completed; advanced to ${stageStatus(next)}`);
     return { ok: true, message: `Study advanced to ${stageStatus(next)}.` };
   };
@@ -356,6 +419,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const accepted = Math.min(Math.max(1, Math.floor(count)), study.target - study.enrolled);
     if (accepted <= 0) return { ok: false, message: "The enrollment target has already been reached." };
     setStudies((items) => items.map((item) => item.id === studyId ? { ...item, enrolled: item.enrolled + accepted } : item));
+    persistRequest("study enrollment", supabase.from("studies").update({ enrolled_participants: study.enrolled + accepted }).eq("study_code", studyId));
     recordAudit(studyId, `${accepted} participant${accepted === 1 ? "" : "s"} enrolled`);
     return { ok: true, message: `${accepted} participant${accepted === 1 ? "" : "s"} recorded.` };
   };
@@ -366,6 +430,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const accepted = Math.min(Math.max(1, Math.floor(count)), study.enrolled - study.visitsComplete);
     if (accepted <= 0) return { ok: false, message: "All participant follow-up visits are complete." };
     setStudies((items) => items.map((item) => item.id === studyId ? { ...item, visitsComplete: item.visitsComplete + accepted } : item));
+    persistRequest("study visits", supabase.from("studies").update({ visits_complete: study.visitsComplete + accepted }).eq("study_code", studyId));
     recordAudit(studyId, `${accepted} follow-up visit${accepted === 1 ? "" : "s"} completed`);
     return { ok: true, message: `${accepted} follow-up visit${accepted === 1 ? "" : "s"} recorded.` };
   };
@@ -374,6 +439,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const number = safetyCases.length + 1;
     const id = `${input.severity}-${new Date().getFullYear()}-${String(number).padStart(3, "0")}`;
     setSafetyCases((items) => [{ ...input, id, stage: "reported", owner: "Safety physician", due: input.severity === "SAE" ? "24h" : "Review" }, ...items]);
+    persistRequest("safety case", supabase.from("safety_cases").insert({
+      id, study_id: input.studyId, title: input.title, severity: input.severity,
+      stage: "reported", owner: "Safety physician", due: input.severity === "SAE" ? "24h" : "Review",
+      onset_at: input.onsetAt ?? null, aware_at: input.awareAt ?? null, reported_at: input.reportedAt ?? null,
+      batch_id: input.batchId ?? null, causality: input.causality ?? null, prakriti: input.prakriti ?? null,
+      concomitant_meds: input.concomitantMeds ?? [], interaction_suspected: input.interactionSuspected ?? null,
+      meddra_term: input.meddraTerm ?? null, namaste_code: input.namasteCode ?? null,
+    }));
     recordAudit(input.studyId, `${input.severity} ${id} reported`);
     return id;
   };
@@ -383,6 +456,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const next = current && nextSafetyStage[current.stage];
     if (!current || !next) return;
     setSafetyCases((items) => items.map((item) => item.id === caseId ? { ...item, stage: next, due: next === "closed" ? "Closed" : item.due } : item));
+    persistRequest("safety case workflow", supabase.from("safety_cases").update({ stage: next, due: next === "closed" ? "Closed" : current.due }).eq("id", caseId));
     recordAudit(current.studyId, `${caseId} advanced to ${next.replaceAll("-", " ")}`);
   };
 
@@ -390,6 +464,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const risk = risks.find((item) => item.id === riskId);
     if (!risk || risk.resolved) return;
     setRisks((items) => items.map((item) => item.id === riskId ? { ...item, resolved: true } : item));
+    persistRequest("compliance risk", supabase.from("compliance_risks").update({ resolved: true }).eq("id", riskId));
     recordAudit(risk.studyId, `Compliance item resolved: ${risk.title}`);
   };
 
@@ -397,6 +472,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const document = documents.find((item) => item.id === documentId);
     if (!document || document.status !== "Draft") return;
     setDocuments((items) => items.map((item) => item.id === documentId ? { ...item, status: "In review", updatedAt: new Date().toISOString() } : item));
+    persistRequest("document status", supabase.from("documents").update({ status: "In review", updated_at: new Date().toISOString() }).eq("id", documentId));
     recordAudit(document.studyId, `Document submitted: ${document.title} v${document.version}`);
   };
 
@@ -404,14 +480,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const document = documents.find((item) => item.id === documentId);
     if (!document || document.status !== "In review") return;
     setDocuments((items) => items.map((item) => item.id === documentId ? { ...item, status: "Approved", updatedAt: new Date().toISOString() } : item));
+    persistRequest("document status", supabase.from("documents").update({ status: "Approved", updated_at: new Date().toISOString() }).eq("id", documentId));
     recordAudit(document.studyId, `Document approved: ${document.title} v${document.version}`);
   };
 
   const reviseDocument = (documentId: string) => {
     const document = documents.find((item) => item.id === documentId);
     if (!document) return;
-    const revised: DocumentRecord = { ...document, id: `${document.id}-v${document.version + 1}`, version: document.version + 1, status: "Draft", updatedAt: new Date().toISOString() };
+    const revised: DocumentRecord = { ...document, id: crypto.randomUUID(), version: document.version + 1, status: "Draft", updatedAt: new Date().toISOString() };
     setDocuments((items) => [...items.map((item) => item.id === documentId ? { ...item, status: "Superseded" as const } : item), revised]);
+    persistRequest("document revision", supabase.from("documents").update({ status: "Superseded", updated_at: revised.updatedAt }).eq("id", documentId));
+    persistRequest("document revision", supabase.from("documents").insert({
+      id: revised.id, study_id: revised.studyId, title: revised.title, version: revised.version,
+      status: revised.status, owner: revised.owner, updated_at: revised.updatedAt,
+    }));
     recordAudit(document.studyId, `Document revised: ${document.title} v${revised.version}`);
   };
 
