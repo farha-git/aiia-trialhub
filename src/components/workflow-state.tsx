@@ -134,10 +134,38 @@ type WorkflowState = {
 const WorkflowContext = createContext<WorkflowState | null>(null);
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [studies, setStudies] = useState(initialStudies);
+  const [studies, setStudies] = useState<WorkflowStudy[]>([]);
   const [safetyCases, setSafetyCases] = useState(initialSafetyCases);
   const [risks, setRisks] = useState(initialRisks);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+    useEffect(() => {
+    async function loadStudies() {
+      try {
+        const data = await getStudies();
+
+        const mappedStudies: WorkflowStudy[] = (data || []).map((study: any) => ({
+          id: study.study_code,
+          title: study.title,
+          phase: study.phase,
+          status: study.status,
+          risk: (study.risk || "Low") as StudyRisk,
+          enrolled: study.enrolled_participants ?? 0,
+          target: study.target_participants ?? 0,
+          activatedSites: study.activated_sites ?? 0,
+          lead: study.lead || study.principal_investigator || "",
+          stage: (study.stage || "protocol") as WorkflowStage,
+          visitsComplete: study.visits_complete ?? 0,
+          archived: study.archived ?? false,
+        }));
+
+        setStudies(mappedStudies);
+      } catch (error) {
+        console.error("Failed to load studies:", error);
+      }
+    }
+
+    void loadStudies();
+  }, []);
   
 
   const recordAudit = (studyId: string, action: string) => {
@@ -145,10 +173,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   };
 
  const createStudy = async (input: NewStudy) => {
-  const number =
-    studies.filter((study) => study.id.startsWith("AIIA-NEW-")).length + 1;
-
-  const studyCode = `AIIA-NEW-${String(number).padStart(3, "0")}`;
+ const studyCode = `AIIA-NEW-${Date.now()}`;
 
   const { data, error } = await supabase
     .from("studies")
