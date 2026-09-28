@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -79,18 +79,40 @@ export function PlatformPage({ eyebrow, title, description, actions, children }:
     <div className="min-h-screen bg-background">
       <PlatformHeader />
       <main className="mx-auto max-w-[1480px] px-4 py-7 lg:px-8 lg:py-10">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-6 border-b border-border pb-7">
+        <div className="grid grid-cols-1 items-end gap-4 border-b border-border pb-7 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6">
           <div className="min-w-0">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">{eyebrow}</p>
             <h1 className="font-display text-3xl font-semibold text-foreground sm:text-4xl">{title}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
           </div>
-          {actions && <div className="hidden shrink-0 sm:block">{actions}</div>}
+          {actions && <div className="flex w-full justify-start sm:w-auto sm:justify-end">{actions}</div>}
         </div>
         <div className="mt-7 animate-fade-in">{children}</div>
       </main>
     </div>
   );
+}
+
+export function WorkflowModal({ open, title, description, onClose, children }: { open: boolean; title: string; description: string; onClose: () => void; children: ReactNode }) {
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return <div className="fixed inset-0 z-[70] grid place-items-center bg-foreground/35 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} className="max-h-[min(90dvh,720px)] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-background p-5 shadow-2xl sm:p-6">
+      <header className="mb-5 flex items-start justify-between gap-4"><div><h2 id={titleId} className="font-display text-lg font-semibold">{title}</h2><p id={descriptionId} className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p></div><Button type="button" variant="ghost" size="icon" aria-label="Close dialog" onClick={onClose}><X className="size-4" /></Button></header>
+      {children}
+    </section>
+  </div>;
 }
 
 export function StatusPill({ tone = "neutral", children }: { tone?: "good" | "risk" | "warn" | "neutral"; children: ReactNode }) {

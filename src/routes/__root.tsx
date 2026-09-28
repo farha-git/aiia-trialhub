@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
 import {
   Outlet,
   Link,
@@ -11,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { ClinicalChatbot } from "@/components/clinical-chatbot";
 import { Toaster } from "@/components/ui/sonner";
+import { WorkflowProvider } from "@/components/workflow-state";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -121,10 +123,13 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <ClinicalChatbot />
-      <Toaster position="bottom-right" richColors />
+      <WorkflowProvider>
+     
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <ClinicalChatbot />
+        <Toaster position="bottom-right" richColors />
+      </WorkflowProvider>
     </QueryClientProvider>
   );
 }

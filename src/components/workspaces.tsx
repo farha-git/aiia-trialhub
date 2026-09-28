@@ -1,41 +1,63 @@
-import { Link } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Archive, ArrowUpRight, CheckCircle2, Download, FileText, Filter, FolderOpen, MoreHorizontal, Plus, Search, ShieldAlert } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { AttentionItem, PlatformPage, ProgressBar, StatusPill, Timeline } from "@/components/trialshield";
+import { AttentionItem, PlatformPage, ProgressBar, StatusPill, Timeline, WorkflowModal } from "@/components/trialshield";
 import { Button } from "@/components/ui/button";
-import { clinicalReportRows, downloadClinicalReport, type ClinicalReportFormat } from "@/lib/clinical-report";
-
-const studies = [
-  { id: "AIIA-OA-024", title: "Comparative efficacy of classical formulation in knee osteoarthritis", phase: "Phase III · Multi-centre", status: "Recruiting", risk: "High", progress: 68, site: "4 sites", lead: "Dr. Meera Nair" },
-  { id: "AIIA-RA-019", title: "Integrative Ayurveda protocol for rheumatoid arthritis", phase: "Phase II · Interventional", status: "Active", risk: "Moderate", progress: 81, site: "2 sites", lead: "Dr. R. Kulkarni" },
-  { id: "AIIA-DM-031", title: "Metabolic outcomes with Nishamalaki intervention", phase: "Observational · Cohort", status: "Recruiting", risk: "Low", progress: 46, site: "3 sites", lead: "Dr. S. Menon" },
-  { id: "AIIA-PS-017", title: "Prakriti stratification in chronic psoriasis", phase: "Prospective · Registry", status: "Follow-up", risk: "Low", progress: 92, site: "1 site", lead: "Dr. A. Sharma" },
-  { id: "AIIA-HT-008", title: "Completed observational care-pathway study", phase: "Observational · Cohort", status: "Closed", risk: "Low", progress: 100, site: "2 sites", lead: "Dr. N. Iyer", archived: true },
-];
+import { Input } from "@/components/ui/input";
+import { buildClinicalReportRows, downloadClinicalReport, type ClinicalReportFormat } from "@/lib/clinical-report";
+import { useWorkflow, getStudyProgress } from "@/components/workflow-state";
 
 export function StudiesWorkspace() {
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { studies, createStudy } = useWorkflow();
   const [query, setQuery] = useState("");
   const [recruitingOnly, setRecruitingOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [newStudies, setNewStudies] = useState<typeof studies>([]);
-  const allStudies = [...studies, ...newStudies];
-  const visibleStudies = allStudies.filter((study) => Boolean(study.archived) === showArchived)
+  const [createOpen, setCreateOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [phase, setPhase] = useState("Phase I · Interventional");
+  const [target, setTarget] = useState(20);
+  const [lead, setLead] = useState("");
+  if (pathname !== "/studies") return <Outlet />;
+  const visibleStudies = studies.filter((study) => study.archived === showArchived)
     .filter((study) => !recruitingOnly || study.status === "Recruiting")
     .filter((study) => `${study.id} ${study.title} ${study.lead}`.toLowerCase().includes(query.toLowerCase()));
 
-  const createStudy = () => {
-    const title = window.prompt("Study title");
-    if (!title?.trim()) return;
-    const study = { id: `AIIA-NEW-${String(newStudies.length + 1).padStart(3, "0")}`, title: title.trim(), phase: "Planning", status: "Planning", risk: "Low", progress: 0, site: "1 site", lead: "Unassigned" };
-    setNewStudies((current) => [...current, study]);
-    setShowArchived(false);
-    toast.success(`${study.id} added to this demo session.`);
-  };
+  const submitStudy = async (event: React.FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
 
-  return <PlatformPage eyebrow="Study operations" title="Studies" description="Follow each protocol from ethics readiness through recruitment, intervention and close-out." actions={<Button onClick={createStudy}><Plus className="size-4" />New study</Button>}>
+  try {
+    const studyId = await createStudy({
+      title: title.trim(),
+      phase,
+      target,
+      lead: lead.trim(),
+    });
+
+    setCreateOpen(false);
+    toast.success(`${studyId} created. Start with the protocol package.`);
+    void navigate({
+      to: "/studies/$studyId",
+      params: { studyId },
+    });
+  } catch (error) {
+    console.error(error);
+    toast.error("Failed to create study.");
+  }
+};
+  return <PlatformPage eyebrow="Study operations" title="Studies" description="Follow each protocol from ethics readiness through recruitment, intervention and close-out." actions={<Button onClick={() => setCreateOpen(true)}><Plus className="size-4" />New study</Button>}>
+    <WorkflowModal open={createOpen} title="Register a study" description="Create a synthetic demo study. The workflow will start at protocol preparation." onClose={() => setCreateOpen(false)}>
+        <form onSubmit={submitStudy} className="space-y-4">
+          <label className="block space-y-1.5 text-sm font-medium">Study title<Input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Ayurveda intervention outcomes" /></label>
+          <label className="block space-y-1.5 text-sm font-medium">Study design<select value={phase} onChange={(event) => setPhase(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option>Phase I · Interventional</option><option>Phase II · Interventional</option><option>Phase III · Multi-centre</option><option>Observational · Cohort</option><option>Prospective · Registry</option></select></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block space-y-1.5 text-sm font-medium">Enrollment target<Input type="number" min={1} max={10000} required value={target} onChange={(event) => setTarget(Number(event.target.value))} /></label><label className="block space-y-1.5 text-sm font-medium">Principal investigator<Input required value={lead} onChange={(event) => setLead(event.target.value)} placeholder="Investigator name" /></label></div>
+          <div className="flex justify-end"><Button type="submit"><Plus className="size-4" />Create study</Button></div>
+        </form>
+    </WorkflowModal>
     <div className="flex flex-col gap-5">
       <div className="grid gap-3 border-b border-border pb-5 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
         <label className="flex h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-muted-foreground"><Search className="size-4" /><input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none" placeholder="Search study, investigator or CTRI ID" /></label>
@@ -45,9 +67,9 @@ export function StudiesWorkspace() {
       <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-xs">
         {visibleStudies.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">No studies match this view.</p> : visibleStudies.map((study) => <Link key={study.id} to="/studies/$studyId" params={{ studyId: study.id }} className="group grid gap-4 border-b border-border p-5 transition-colors last:border-0 hover:bg-muted/60 lg:grid-cols-[90px_minmax(0,1fr)_130px_160px_120px] lg:items-center">
           <p className="text-[11px] font-semibold text-secondary">{study.id}</p>
-          <div className="min-w-0"><h2 className="font-display text-sm font-semibold text-foreground group-hover:text-primary">{study.title}</h2><p className="mt-1 text-xs text-muted-foreground">{study.phase} · {study.site} · {study.lead}</p></div>
-          <StatusPill tone={study.status === "Recruiting" ? "good" : "neutral"}>{study.status}</StatusPill>
-          <div><div className="mb-2 flex justify-between text-[11px]"><span className="text-muted-foreground">Recruitment</span><strong>{study.progress}%</strong></div><ProgressBar value={study.progress} /></div>
+          <div className="min-w-0"><h2 className="font-display text-sm font-semibold text-foreground group-hover:text-primary">{study.title}</h2><p className="mt-1 text-xs text-muted-foreground">{study.phase} · {study.activatedSites} active sites · {study.lead}</p></div>
+          <StatusPill tone={study.status === "Recruiting" ? "good" : study.stage === "closed" ? "neutral" : "warn"}>{study.status}</StatusPill>
+          <div><div className="mb-2 flex justify-between text-[11px]"><span className="text-muted-foreground">Recruitment</span><strong>{getStudyProgress(study)}%</strong></div><ProgressBar value={getStudyProgress(study)} /></div>
           <div className="flex items-center justify-between"><StatusPill tone={study.risk === "High" ? "risk" : study.risk === "Moderate" ? "warn" : "good"}>{study.risk} risk</StatusPill><ArrowUpRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" /></div>
         </Link>)}
       </div>
@@ -56,36 +78,52 @@ export function StudiesWorkspace() {
 }
 
 export function SafetyWorkspace() {
-  const [loggedEvent, setLoggedEvent] = useState("");
-  const logEvent = () => {
-    const event = window.prompt("Brief adverse-event description (synthetic demo only)");
-    if (!event?.trim()) return;
-    setLoggedEvent(event.trim());
-    toast.success("Synthetic safety event added to this demo session.");
+  const { safetyCases, studies, addSafetyCase, advanceSafetyCase } = useWorkflow();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [description, setDescription] = useState("");
+  const [studyId, setStudyId] = useState(studies[0]?.id ?? "");
+  const [severity, setSeverity] = useState<"AE" | "SAE">("SAE");
+  const openCases = safetyCases.filter((item) => item.stage !== "closed");
+  const openSaes = openCases.filter((item) => item.severity === "SAE").length;
+  const dueCase = openCases[0];
+  const stageLabel: Record<(typeof safetyCases)[number]["stage"], string> = { reported: "Reported", "medical-review": "Medical review", "regulatory-reporting": "Regulatory reporting", "follow-up": "Follow-up", "ready-to-close": "Ready to close", "signal-review": "Signal review", closed: "Closed" };
+  const nextAction: Record<(typeof safetyCases)[number]["stage"], string> = { reported: "Start review", "medical-review": "Submit report", "regulatory-reporting": "Request follow-up", "follow-up": "Confirm follow-up", "ready-to-close": "Close case", "signal-review": "Assess signal", closed: "Closed" };
+  const submitCase = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!description.trim() || !studyId) return;
+    const caseId = addSafetyCase({ studyId, title: description.trim(), severity });
+    setDescription("");
+    setCreateOpen(false);
+    toast.success(`${caseId} added to the safety workflow.`);
   };
-  return <PlatformPage eyebrow="Pharmacovigilance" title="Safety workspace" description="Investigate serious adverse events, maintain causality evidence and keep regulatory deadlines visible." actions={<Button onClick={logEvent}><Plus className="size-4" />Log safety event</Button>}>
+  return <PlatformPage eyebrow="Pharmacovigilance" title="Safety workspace" description="Investigate adverse events, track reporting timelines, and move each case through review and close-out." actions={<Button onClick={() => setCreateOpen(true)}><Plus className="size-4" />Log safety event</Button>}>
+    <WorkflowModal open={createOpen} title="Report an adverse event" description="Record synthetic demo data only. A real SAE process requires qualified clinical and regulatory review." onClose={() => setCreateOpen(false)}>
+        <form onSubmit={submitCase} className="space-y-4">
+          <label className="block space-y-1.5 text-sm font-medium">Related study<select value={studyId} onChange={(event) => setStudyId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{studies.filter((study) => !study.archived).map((study) => <option key={study.id} value={study.id}>{study.id} · {study.title}</option>)}</select></label>
+          <label className="block space-y-1.5 text-sm font-medium">Event description<Input required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the synthetic event" /></label>
+          <label className="block space-y-1.5 text-sm font-medium">Report type<select value={severity} onChange={(event) => setSeverity(event.target.value as "AE" | "SAE")} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="AE">Adverse event (AE)</option><option value="SAE">Serious adverse event (SAE)</option></select></label>
+          <div className="flex justify-end"><Button type="submit"><Plus className="size-4" />Create safety report</Button></div>
+        </form>
+    </WorkflowModal>
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.7fr)]">
-      <section className="rounded-lg border border-border bg-surface p-5 shadow-xs"><div className="mb-2 flex items-center justify-between"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-risk">Needs attention</p><h2 className="mt-1 font-display text-xl font-semibold">Open SAE investigations</h2></div><StatusPill tone="risk">4 open</StatusPill></div>
-        <AttentionItem severity="critical" title="SAE-2026-014 · Acute hepatic injury" meta="AIIA-OA-024 · Day 5" owner="Dr. Kavita Rao" action="Investigate" onAction={() => toast.info("SAE-2026-014 investigation opened.")} />
-        <AttentionItem severity="critical" title="SAE-2026-011 · Hospitalisation" meta="AIIA-RA-019 · Follow-up overdue" owner="Safety physician" action="Review" onAction={() => toast.info("SAE-2026-011 follow-up review opened.")} />
-        <AttentionItem severity="warning" title="AE cluster · Gastrointestinal symptoms" meta="6 related cases at Site 03" owner="Signal review board" action="Assess" onAction={() => toast.info("The Site 03 event cluster is queued for signal assessment.")} />
-        <AttentionItem severity="stable" title="SAE-2026-009 · Fracture after fall" meta="Causality documented" owner="PI, Jaipur site" action="Close" onAction={() => toast.success("SAE-2026-009 marked ready for close-out review.")} />
-        {loggedEvent && <AttentionItem severity="warning" title={`New demo event · ${loggedEvent}`} meta="AIIA-OA-024 · Just captured" owner="Safety physician" action="Review" onAction={() => toast.info("Synthetic event review opened.")} />}
+      <section className="rounded-lg border border-border bg-surface p-5 shadow-xs"><div className="mb-2 flex items-center justify-between"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-risk">Needs attention</p><h2 className="mt-1 font-display text-xl font-semibold">Safety reports in progress</h2></div><StatusPill tone="risk">{openSaes} open SAEs</StatusPill></div>
+        {openCases.map((item) => <AttentionItem key={item.id} severity={item.severity === "SAE" ? "critical" : "warning"} title={`${item.id} · ${item.title}`} meta={`${item.studyId} · ${stageLabel[item.stage]} · Due ${item.due}`} owner={item.owner} action={nextAction[item.stage]} onAction={() => { advanceSafetyCase(item.id); toast.success(`${item.id} moved to the next review step.`); }} />)}
+        {openCases.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No open safety reports.</p>}
+        <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">{safetyCases.filter((item) => item.stage === "closed").length} closed case(s) in this demo session.</p>
       </section>
-      <aside className="space-y-6"><section className="rounded-lg bg-primary p-6 text-primary-foreground"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-foreground/65">Nearest deadline</p><p className="mt-4 font-display text-3xl font-semibold">18h 42m</p><p className="mt-2 text-sm text-primary-foreground/70">Expedited ethics notification for SAE-2026-014</p><Button variant="accent" className="mt-6 w-full" onClick={() => toast.info("SAE-2026-014 case file opened in this demo workspace.")}>Open case file<ArrowUpRight className="size-4" /></Button></section>
+      <aside className="space-y-6"><section className="rounded-lg bg-primary p-6 text-primary-foreground"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-foreground/65">Nearest deadline</p><p className="mt-4 font-display text-3xl font-semibold">{dueCase?.due ?? "None"}</p><p className="mt-2 text-sm text-primary-foreground/70">{dueCase ? `${dueCase.id} · ${dueCase.title}` : "No active safety deadlines"}</p><Button variant="accent" className="mt-6 w-full" onClick={() => dueCase ? advanceSafetyCase(dueCase.id) : toast.info("No open safety case to review.")}>{dueCase ? nextAction[dueCase.stage] : "No action due"}<ArrowUpRight className="size-4" /></Button></section>
       <section className="rounded-lg border border-border bg-surface p-5"><h2 className="mb-5 font-display text-base font-semibold">Review workflow</h2><Timeline items={[{ title: "Initial report captured", detail: "Site 02 submitted complete source packet", time: "09:12", state: "done" }, { title: "Medical review", detail: "Causality and expectedness assessment", time: "Now", state: "current" }, { title: "Ethics notification", detail: "Due before 08:00 tomorrow", time: "18h", state: "risk" }, { title: "Follow-up evidence", detail: "Awaiting discharge summary", time: "Open" }]} /></section></aside>
     </div>
   </PlatformPage>;
 }
 
 export function ComplianceWorkspace() {
-  const [resolvedRisks, setResolvedRisks] = useState<string[]>([]);
+  const { risks, resolveRisk } = useWorkflow();
+  const openRiskCount = risks.filter((risk) => !risk.resolved).length;
   return <PlatformPage eyebrow="Governance" title="Compliance center" description="A single evidence trail for ethics approvals, CTRI readiness, amendments and institutional review." actions={<Button variant="secondary" onClick={() => { const opened = downloadClinicalReport("pdf"); if (opened) toast.success("Print-ready audit brief opened."); else toast.error("Allow pop-ups to open the audit brief."); }}><Download className="size-4" />Audit brief</Button>}>
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,.75fr)]">
-      <section className="rounded-lg border border-border bg-surface p-6"><div className="flex items-end justify-between border-b border-border pb-5"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Institutional evidence trail</p><h2 className="mt-1 font-display text-xl font-semibold">Readiness journey</h2></div><StatusPill tone="warn">3 actions open</StatusPill></div><div className="mt-6"><Timeline items={[{ title: "Ethics committee approval renewed", detail: "IEC/AIIA/2026/042 · Valid through 18 March 2027", time: "12 Sep", state: "done" }, { title: "Protocol amendment v3.2 submitted", detail: "Dosing window and laboratory schedule updated", time: "18 Sep", state: "current" }, { title: "CTRI record requires reconciliation", detail: "Secondary outcome wording differs from approved protocol", time: "Due 27 Sep", state: "risk" }, { title: "Site delegation log review", detail: "Signatures pending from two research coordinators", time: "Due 30 Sep" }, { title: "Quarterly internal audit", detail: "Evidence collection opens next week", time: "03 Oct" }]} /></div></section>
-      <aside className="space-y-4"><h2 className="font-display text-base font-semibold">Open compliance risks</h2>{[
-        ["CTRI outcome mismatch", "AIIA-OA-024", "Regulatory owner", "High"], ["Expired GCP certificate", "Site 04 · Investigator 07", "Site lead", "Medium"], ["Consent form superseded", "AIIA-DM-031", "Document controller", "Medium"],
-      ].filter(([title]) => !resolvedRisks.includes(title)).map(([title, meta, owner, risk]) => <article key={title} className="rounded-lg border border-border bg-surface p-5"><div className="flex items-start justify-between gap-4"><ShieldAlert className="size-5 text-risk" /><StatusPill tone={risk === "High" ? "risk" : "warn"}>{risk}</StatusPill></div><h3 className="mt-4 text-sm font-semibold">{title}</h3><p className="mt-1 text-xs text-muted-foreground">{meta}</p><div className="mt-5 flex items-center justify-between border-t border-border pt-4 text-xs"><span className="text-muted-foreground">{owner}</span><Button variant="ghost" size="sm" onClick={() => { setResolvedRisks((current) => [...current, title]); toast.success(`${title} marked resolved for this demo session.`); }}>Resolve<ArrowUpRight className="size-3.5" /></Button></div></article>)}</aside>
+      <section className="rounded-lg border border-border bg-surface p-6"><div className="flex items-end justify-between border-b border-border pb-5"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Institutional evidence trail</p><h2 className="mt-1 font-display text-xl font-semibold">Readiness journey</h2></div><StatusPill tone={openRiskCount ? "warn" : "good"}>{openRiskCount} actions open</StatusPill></div><div className="mt-6"><Timeline items={risks.slice(0, 5).map((risk) => ({ title: risk.title, detail: `${risk.studyId} · ${risk.resolved ? "Resolved in this demo session" : `Owner: ${risk.owner}`}`, time: risk.resolved ? "Done" : risk.severity, state: risk.resolved ? "done" as const : risk.severity === "High" ? "risk" as const : "current" as const }))} /></div>{risks.length === 0 && <p className="mt-5 text-sm text-muted-foreground">No compliance actions are recorded.</p>}</section>
+      <aside className="space-y-4"><h2 className="font-display text-base font-semibold">Compliance items</h2>{risks.map((risk) => <article key={risk.id} className="rounded-lg border border-border bg-surface p-5"><div className="flex items-start justify-between gap-4"><ShieldAlert className={`size-5 ${risk.resolved ? "text-positive" : "text-risk"}`} /><StatusPill tone={risk.resolved ? "good" : risk.severity === "High" ? "risk" : "warn"}>{risk.resolved ? "Resolved" : risk.severity}</StatusPill></div><h3 className="mt-4 text-sm font-semibold">{risk.title}</h3><p className="mt-1 text-xs text-muted-foreground">{risk.studyId} · {risk.detail}</p><div className="mt-5 flex items-center justify-between border-t border-border pt-4 text-xs"><span className="text-muted-foreground">{risk.owner}</span>{!risk.resolved && <Button variant="ghost" size="sm" onClick={() => { resolveRisk(risk.id); toast.success(`${risk.title} resolved for this demo session.`); }}>Resolve<ArrowUpRight className="size-3.5" /></Button>}</div></article>)}</aside>
     </div>
   </PlatformPage>;
 }
@@ -98,21 +136,28 @@ const utilityContent = {
 
 export function UtilityWorkspace({ type }: { type: keyof typeof utilityContent }) {
   const data = utilityContent[type];
+  const workflow = useWorkflow();
   const [format, setFormat] = useState<ClinicalReportFormat>("pdf");
-  const recruitmentData = clinicalReportRows.map((row) => ({ study: row.studyId.replace("AIIA-", ""), Enrolled: row.enrolled, Remaining: row.target - row.enrolled }));
-  const qualityData = clinicalReportRows.map((row) => ({ study: row.studyId.replace("AIIA-", ""), Completeness: row.dataCompleteness, "Open SAEs": row.openSaes * 20 }));
+  const reportRows = buildClinicalReportRows(workflow.studies, workflow.safetyCases);
+  const totalEnrolled = reportRows.reduce((total, row) => total + row.enrolled, 0);
+  const totalTarget = reportRows.reduce((total, row) => total + row.target, 0);
+  const recruitmentPercent = totalTarget ? Math.round(totalEnrolled / totalTarget * 100) : 0;
+  const openSaes = reportRows.reduce((total, row) => total + row.openSaes, 0);
+  const meanCompleteness = reportRows.length ? Math.round(reportRows.reduce((total, row) => total + row.dataCompleteness, 0) / reportRows.length) : 0;
+  const recruitmentData = reportRows.map((row) => ({ study: row.studyId.replace("AIIA-", ""), Enrolled: row.enrolled, Remaining: Math.max(0, row.target - row.enrolled) }));
+  const qualityData = reportRows.map((row) => ({ study: row.studyId.replace("AIIA-", ""), Completeness: row.dataCompleteness, "Open SAEs": row.openSaes * 20 }));
   const downloadReport = () => {
-    if (downloadClinicalReport(format)) toast.success(format === "pdf" ? "Print-ready report opened. Choose Save as PDF in the print dialog." : `Portfolio report downloaded as ${format.toUpperCase()}.`);
+    if (downloadClinicalReport(format, reportRows)) toast.success(format === "pdf" ? "Print-ready report opened. Choose Save as PDF in the print dialog." : `Portfolio report downloaded as ${format.toUpperCase()}.`);
     else toast.error("The report window was blocked. Allow pop-ups to create the PDF.");
   };
 
   return <PlatformPage eyebrow={data.eyebrow} title={data.title} description={data.description} actions={type === "exports" || type === "analytics" ? <Button onClick={downloadReport}><Download className="size-4" />Download report</Button> : <Button variant="secondary" onClick={() => toast.info("Document options are available in this synthetic demonstration.")}><MoreHorizontal className="size-4" />Options</Button>}>
     {type === "exports" || type === "analytics" ? <div className="space-y-6">
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/8 text-primary">{data.icon}</div><div><h2 className="font-display text-lg font-semibold">{data.heading}</h2><p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{data.detail}</p></div></div><div className="flex flex-wrap items-center gap-2"><label htmlFor="report-format" className="sr-only">Report format</label><select id="report-format" value={format} onChange={(event) => setFormat(event.target.value as ClinicalReportFormat)} className="h-10 min-w-40 rounded-md border border-input bg-background px-3 text-sm"><option value="pdf">PDF (print dialog)</option><option value="excel">Excel workbook (.xls)</option><option value="csv">CSV</option><option value="json">JSON</option><option value="xml">XML</option><option value="fhir">FHIR R4 Bundle JSON</option></select><Button onClick={downloadReport}><Download className="size-4" />Download</Button></div></div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Active studies", "12", "Across interventional and observational research"], ["Recruitment", "69%", "482 of 700 participants enrolled"], ["Open serious events", "4", "2 expedited reviews require attention"], ["Data completeness", "90%", "Mean across four synthetic study records"]].map(([label, value, note]) => <article key={label} className="border-l-2 border-secondary bg-surface px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-1 font-display text-2xl font-semibold">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{note}</p></article>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Active studies", String(reportRows.length), "Current non-archived studies"], ["Recruitment", `${recruitmentPercent}%`, `${totalEnrolled} of ${totalTarget} participants enrolled`], ["Open serious events", String(openSaes), "Across the current study portfolio"], ["Data completeness", `${meanCompleteness}%`, "Mean across current report rows"]].map(([label, value, note]) => <article key={label} className="border-l-2 border-secondary bg-surface px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-1 font-display text-2xl font-semibold">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{note}</p></article>)}</div>
       <div className="grid gap-5 xl:grid-cols-2"><section className="rounded-lg border border-border bg-surface p-5"><div className="mb-4"><h2 className="font-display text-base font-semibold">Recruitment against target</h2><p className="mt-1 text-xs text-muted-foreground">Enrolled participants and remaining target by study</p></div><div className="h-72 w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={recruitmentData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="study" tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip /><Legend /><Bar dataKey="Enrolled" stackId="a" fill="hsl(var(--secondary))" radius={[3, 3, 0, 0]} /><Bar dataKey="Remaining" stackId="a" fill="hsl(var(--muted))" /></BarChart></ResponsiveContainer></div></section>
         <section className="rounded-lg border border-border bg-surface p-5"><div className="mb-4"><h2 className="font-display text-base font-semibold">Data quality and safety</h2><p className="mt-1 text-xs text-muted-foreground">Completeness percentage with open SAE count scaled for comparison</p></div><div className="h-72 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={qualityData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="study" tickLine={false} axisLine={false} /><YAxis domain={[0, 100]} tickLine={false} axisLine={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="Completeness" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} /><Line type="monotone" dataKey="Open SAEs" stroke="hsl(var(--destructive))" strokeWidth={2} strokeDasharray="5 4" /></LineChart></ResponsiveContainer></div></section></div>
-      <section className="overflow-hidden rounded-lg border border-border bg-surface"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><h2 className="font-display text-base font-semibold">Study-level report</h2><p className="mt-1 text-xs text-muted-foreground">Synthetic demonstration data only; no participant identifiers included.</p></div><StatusPill tone="neutral">{clinicalReportRows.length} sample studies</StatusPill></div><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-xs"><thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground"><tr>{["Study", "Phase / status", "Recruitment", "Ethics", "CTRI", "Open SAEs", "Data completeness"].map((heading) => <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>)}</tr></thead><tbody>{clinicalReportRows.map((row) => <tr key={row.studyId} className="border-t border-border"><td className="px-4 py-3 font-semibold text-secondary">{row.studyId}<p className="mt-1 font-normal text-muted-foreground">{row.title}</p></td><td className="px-4 py-3">{row.phase}<p className="mt-1 text-muted-foreground">{row.status}</p></td><td className="px-4 py-3">{row.enrolled} / {row.target}<div className="mt-2 w-28"><ProgressBar value={Math.round(row.enrolled / row.target * 100)} /></div></td><td className="px-4 py-3">{row.ethics}</td><td className="px-4 py-3">{row.ctri}</td><td className="px-4 py-3">{row.openSaes}</td><td className="px-4 py-3">{row.dataCompleteness}%</td></tr>)}</tbody></table></div></section>
+      <section className="overflow-hidden rounded-lg border border-border bg-surface"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><h2 className="font-display text-base font-semibold">Study-level report</h2><p className="mt-1 text-xs text-muted-foreground">Synthetic demonstration data only; no participant identifiers included.</p></div><StatusPill tone="neutral">{reportRows.length} current studies</StatusPill></div><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-xs"><thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground"><tr>{["Study", "Phase / status", "Recruitment", "Ethics", "CTRI", "Open SAEs", "Data completeness"].map((heading) => <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>)}</tr></thead><tbody>{reportRows.map((row) => <tr key={row.studyId} className="border-t border-border"><td className="px-4 py-3 font-semibold text-secondary">{row.studyId}<p className="mt-1 font-normal text-muted-foreground">{row.title}</p></td><td className="px-4 py-3">{row.phase}<p className="mt-1 text-muted-foreground">{row.status}</p></td><td className="px-4 py-3">{row.enrolled} / {row.target}<div className="mt-2 w-28"><ProgressBar value={Math.min(100, Math.round(row.enrolled / Math.max(row.target, 1) * 100))} /></div></td><td className="px-4 py-3">{row.ethics}</td><td className="px-4 py-3">{row.ctri}</td><td className="px-4 py-3">{row.openSaes}</td><td className="px-4 py-3">{row.dataCompleteness}%</td></tr>)}</tbody></table></div></section>
       <p className="text-[11px] leading-5 text-muted-foreground">FHIR R4 download is a demonstration Bundle, not a conformance-validated ABDM exchange. CSV, JSON and XML are operational summaries, not validated SDTM, ADaM or Define-XML submissions. Data is synthetic and must not be used for care or regulatory decisions.</p>
     </div> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,.75fr)]"><section className="rounded-lg border border-border bg-surface p-6"><div className="flex size-10 items-center justify-center rounded-md bg-primary/8 text-primary">{data.icon}</div><h2 className="mt-5 font-display text-xl font-semibold">{data.heading}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{data.detail}</p><div className="mt-8 space-y-4">{["Protocol and source alignment", "Data quality verification", "Responsible owner review"].map((label, index) => <div key={label} className="flex items-center gap-4 border-t border-border pt-4"><span className="grid size-7 place-items-center rounded-full bg-muted text-xs font-semibold">0{index + 1}</span><span className="flex-1 text-sm font-medium">{label}</span><StatusPill tone={index === 0 ? "good" : index === 1 ? "warn" : "neutral"}>{index === 0 ? "Complete" : index === 1 ? "Review" : "Queued"}</StatusPill></div>)}</div></section><aside className="rounded-lg border border-border bg-muted/40 p-6"><FileText className="size-6 text-secondary" /><h2 className="mt-5 font-display text-base font-semibold">Latest activity</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">The evidence set was updated by Research Operations at 14:32 today. All changes remain traceable in the audit record.</p><Button variant="secondary" className="mt-6 w-full" onClick={() => toast.info("Latest document activity: protocol amendment v3.2 was logged at 14:32.")}>View activity<ArrowUpRight className="size-4" /></Button></aside></div>}
   </PlatformPage>;
