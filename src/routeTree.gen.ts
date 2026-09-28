@@ -10,18 +10,26 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as DocumentsRouteImport } from './routes/documents'
 import { Route as ExportsRouteImport } from './routes/exports'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as SafetyRouteImport } from './routes/safety'
 import { Route as StudiesRouteImport } from './routes/studies'
+import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as StudiesStudyIdRouteImport } from './routes/studies.$studyId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
@@ -44,6 +52,11 @@ const ExportsRoute = ExportsRouteImport.update({
   path: '/exports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlatformRoute = PlatformRouteImport.update({
   id: '/platform',
   path: '/platform',
@@ -59,6 +72,11 @@ const StudiesRoute = StudiesRouteImport.update({
   path: '/studies',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnauthorizedRoute = UnauthorizedRouteImport.update({
+  id: '/unauthorized',
+  path: '/unauthorized',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudiesStudyIdRoute = StudiesStudyIdRouteImport.update({
   id: '/$studyId',
   path: '/$studyId',
@@ -67,83 +85,104 @@ const StudiesStudyIdRoute = StudiesStudyIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/compliance': typeof ComplianceRoute
   '/documents': typeof DocumentsRoute
   '/exports': typeof ExportsRoute
+  '/login': typeof LoginRoute
   '/platform': typeof PlatformRoute
   '/safety': typeof SafetyRoute
   '/studies': typeof StudiesRouteWithChildren
+  '/unauthorized': typeof UnauthorizedRoute
   '/studies/$studyId': typeof StudiesStudyIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/compliance': typeof ComplianceRoute
   '/documents': typeof DocumentsRoute
   '/exports': typeof ExportsRoute
+  '/login': typeof LoginRoute
   '/platform': typeof PlatformRoute
   '/safety': typeof SafetyRoute
   '/studies': typeof StudiesRouteWithChildren
+  '/unauthorized': typeof UnauthorizedRoute
   '/studies/$studyId': typeof StudiesStudyIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/analytics': typeof AnalyticsRoute
   '/compliance': typeof ComplianceRoute
   '/documents': typeof DocumentsRoute
   '/exports': typeof ExportsRoute
+  '/login': typeof LoginRoute
   '/platform': typeof PlatformRoute
   '/safety': typeof SafetyRoute
   '/studies': typeof StudiesRouteWithChildren
+  '/unauthorized': typeof UnauthorizedRoute
   '/studies/$studyId': typeof StudiesStudyIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/analytics'
     | '/compliance'
     | '/documents'
     | '/exports'
+    | '/login'
     | '/platform'
     | '/safety'
     | '/studies'
+    | '/unauthorized'
     | '/studies/$studyId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/analytics'
     | '/compliance'
     | '/documents'
     | '/exports'
+    | '/login'
     | '/platform'
     | '/safety'
     | '/studies'
+    | '/unauthorized'
     | '/studies/$studyId'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/analytics'
     | '/compliance'
     | '/documents'
     | '/exports'
+    | '/login'
     | '/platform'
     | '/safety'
     | '/studies'
+    | '/unauthorized'
     | '/studies/$studyId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   AnalyticsRoute: typeof AnalyticsRoute
   ComplianceRoute: typeof ComplianceRoute
   DocumentsRoute: typeof DocumentsRoute
   ExportsRoute: typeof ExportsRoute
+  LoginRoute: typeof LoginRoute
   PlatformRoute: typeof PlatformRoute
   SafetyRoute: typeof SafetyRoute
   StudiesRoute: typeof StudiesRouteWithChildren
+  UnauthorizedRoute: typeof UnauthorizedRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -153,6 +192,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/analytics': {
@@ -183,6 +229,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/platform': {
       id: '/platform'
       path: '/platform'
@@ -202,6 +255,13 @@ declare module '@tanstack/react-router' {
       path: '/studies'
       fullPath: '/studies'
       preLoaderRoute: typeof StudiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/unauthorized': {
+      id: '/unauthorized'
+      path: '/unauthorized'
+      fullPath: '/unauthorized'
+      preLoaderRoute: typeof UnauthorizedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/studies/$studyId': {
@@ -227,13 +287,16 @@ const StudiesRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   AnalyticsRoute: AnalyticsRoute,
   ComplianceRoute: ComplianceRoute,
   DocumentsRoute: DocumentsRoute,
   ExportsRoute: ExportsRoute,
+  LoginRoute: LoginRoute,
   PlatformRoute: PlatformRoute,
   SafetyRoute: SafetyRoute,
   StudiesRoute: StudiesRouteWithChildren,
+  UnauthorizedRoute: UnauthorizedRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

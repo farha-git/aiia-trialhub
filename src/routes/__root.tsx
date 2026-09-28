@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import { ClinicalChatbot } from "@/components/clinical-chatbot";
 import { Toaster } from "@/components/ui/sonner";
 import { WorkflowProvider } from "@/components/workflow-state";
+import { AuthProvider } from "@/lib/auth-context";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -123,13 +124,13 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WorkflowProvider>
-     
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <ClinicalChatbot />
-        <Toaster position="bottom-right" richColors />
-      </WorkflowProvider>
+      <AuthProvider>
+        <WorkflowProvider>
+          <Outlet />
+          <ClinicalChatbot />
+          <Toaster position="bottom-right" richColors />
+        </WorkflowProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -40,7 +40,7 @@ export function buildClinicalReportRows(
   }));
 }
 
-export type ClinicalReportFormat = "csv" | "excel" | "json" | "xml" | "fhir" | "pdf";
+export type ClinicalReportFormat = "csv" | "excel" | "json" | "xml" | "fhir" | "pdf" | "cdisc-ts";
 
 function saveBlob(content: string, filename: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -51,6 +51,24 @@ function saveBlob(content: string, filename: string, type: string) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function buildTsCsv(studies: Array<{ id: string; title: string; phase: string; target: number; startedOn?: string | undefined }>) {
+  const rows = [["STUDYID", "DOMAIN", "TSSEQ", "TSPARMCD", "TSPARM", "TSVAL"]];
+  studies.forEach((study) => {
+    let sequence = 1;
+    rows.push([study.id, "TS", String(sequence++), "TITLE", "Study Title", study.title]);
+    rows.push([study.id, "TS", String(sequence++), "PLANSUB", "Planned Subjects", String(study.target)]);
+    if (study.startedOn) rows.push([study.id, "TS", String(sequence++), "SSTDTC", "Study Start Date", study.startedOn.slice(0, 10)]);
+    const phase = study.phase.match(/Phase (I{1,3}|IV)\b/i)?.[0];
+    if (phase) rows.push([study.id, "TS", String(sequence), "TPHASE", "Trial Phase", phase.toUpperCase()]);
+  });
+  return rows.map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(",")).join("\r\n");
+}
+
+export function downloadTsCsv(studies: Array<{ id: string; title: string; phase: string; target: number; startedOn?: string | undefined }>) {
+  saveBlob(`\uFEFF${buildTsCsv(studies)}`, `aiia-trialshield-ts-draft-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv;charset=utf-8");
+  return true;
 }
 
 function escapeXml(value: string | number) {
@@ -72,6 +90,9 @@ function makePrintableReport(reportRows: ClinicalReportRow[]) {
 
 export function downloadClinicalReport(format: ClinicalReportFormat, reportRows: ClinicalReportRow[] = clinicalReportRows) {
   const date = new Date().toISOString().slice(0, 10);
+  const sourceRows = reportRows.length > 0 ? reportRows : clinicalReportRows;
+  const firstRow = sourceRows[0];
+  if (!firstRow) return false;
   if (format === "pdf") {
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) return false;
@@ -82,19 +103,19 @@ export function downloadClinicalReport(format: ClinicalReportFormat, reportRows:
   }
 
   if (format === "csv") {
-    const columns = Object.keys(reportRows[0] ?? clinicalReportRows[0]) as Array<keyof ClinicalReportRow>;
+    const columns = Object.keys(firstRow) as Array<keyof ClinicalReportRow>;
     const lines = [columns.join(","), ...reportRows.map((row) => columns.map((column) => `"${String(row[column]).replace(/"/g, '""')}"`).join(","))];
     saveBlob(`\uFEFF${lines.join("\r\n")}`, `aiia-ctms-portfolio-${date}.csv`, "text/csv;charset=utf-8");
   } else if (format === "excel") {
-    const columns = Object.keys(reportRows[0] ?? clinicalReportRows[0]) as Array<keyof ClinicalReportRow>;
+    const columns = Object.keys(firstRow) as Array<keyof ClinicalReportRow>;
     const cells = (values: Array<string | number>) => `<Row>${values.map((value) => `<Cell><Data ss:Type="${typeof value === "number" ? "Number" : "String"}">${escapeXml(value)}</Data></Cell>`).join("")}</Row>`;
     const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Portfolio"><Table>${cells(columns)}${reportRows.map((row) => cells(columns.map((column) => row[column]))).join("")}</Table></Worksheet></Workbook>`;
     saveBlob(workbook, `aiia-ctms-portfolio-${date}.xls`, "application/vnd.ms-excel;charset=utf-8");
   } else if (format === "json") {
-    saveBlob(JSON.stringify({ generatedAt: new Date().toISOString(), synthetic: true, studies: reportRows }, null, 2), `aiia-ctms-portfolio-${date}.json`, "application/json");
+    saveBlob(JSON.stringify({ generatedAt: new Date().toISOString(), studies: reportRows }, null, 2), `aiia-ctms-portfolio-${date}.json`, "application/json");
   } else if (format === "xml") {
-    const fields = Object.keys(reportRows[0] ?? clinicalReportRows[0]) as Array<keyof ClinicalReportRow>;
-    const xml = `<?xml version="1.0" encoding="UTF-8"?><portfolio generatedAt="${new Date().toISOString()}" synthetic="true">${reportRows.map((row) => `<study>${fields.map((field) => `<${field}>${escapeXml(row[field])}</${field}>`).join("")}</study>`).join("")}</portfolio>`;
+    const fields = Object.keys(firstRow) as Array<keyof ClinicalReportRow>;
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><portfolio generatedAt="${new Date().toISOString()}">${reportRows.map((row) => `<study>${fields.map((field) => `<${field}>${escapeXml(row[field])}</${field}>`).join("")}</study>`).join("")}</portfolio>`;
     saveBlob(xml, `aiia-ctms-portfolio-${date}.xml`, "application/xml");
   } else {
     const bundle = {
@@ -110,7 +131,7 @@ export function downloadClinicalReport(format: ClinicalReportFormat, reportRows:
           title: row.title,
           status: row.status === "Closed" ? "completed" : "active",
           phase: { text: row.phase },
-          description: `Synthetic demonstration record. ${row.enrolled} of ${row.target} participants enrolled across ${row.sites} sites.`,
+          description: `${row.enrolled} of ${row.target} participants enrolled across ${row.sites} sites.`,
         },
       })),
     };

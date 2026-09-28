@@ -10,16 +10,15 @@ type ChatMessage = {
 type ChatRequest = {
   question: string;
   history: ChatMessage[];
+  snapshot?: unknown;
 };
 
 const projectContext = [
-  "AIIA TrialShield is a frontend CTMS demonstration for Ayurveda research (SIH Problem Statement ID26046). All figures and records below are synthetic, illustrative demo data, not live clinical records.",
+  "AIIA TrialShield is a CTMS platform for Ayurveda research (SIH Problem Statement ID26046). Use the current application records below as the source of truth.",
   `Portfolio sample study records: ${JSON.stringify(clinicalReportRows)}.`,
-  "Portfolio dashboard summary: 12 active studies; 482 enrolled of 700 target (69%); 4 open serious adverse events; 90% mean data completeness across the four sample records.",
-  "Safety workspace: SAE-2026-014 acute hepatic injury for AIIA-OA-024 has an expedited ethics notification due in about 18 hours; SAE-2026-011 hospitalisation has an overdue follow-up; six gastrointestinal events at Site 03 are under signal review; SAE-2026-009 fracture has documented causality. The dashboard reports 4 open SAEs, 2 expedited reviews and 1 overdue follow-up.",
-  "Compliance workspace: IEC/AIIA/2026/042 approval is valid through 18 March 2027; AIIA-OA-024 has a CTRI secondary-outcome wording mismatch against protocol v3.2; an expired GCP certificate is flagged at Site 04; a superseded consent form is flagged for AIIA-DM-031.",
-  "The demo includes portfolio, studies, safety, compliance, analytics, documents and exports workspaces. Exports currently include summary PDF/Excel/CSV/JSON/XML and an illustrative FHIR R4 Bundle. The export files are not validated SDTM, ADaM, Define-XML or ABDM submissions.",
-  "The app has no connected CTMS backend, persistence, live EDC/HIS/CTRI feed, production RBAC, or immutable audit service. Do not claim that any of these are implemented.",
+  "Current study, safety, milestone, document, and compliance values are supplied in the live snapshot with each request.",
+  "The platform includes portfolio, studies, safety, compliance, analytics, documents and exports workspaces. Exports currently include summary PDF/Excel/CSV/JSON/XML and a FHIR R4 Bundle. The export files are not validated SDTM, ADaM, Define-XML or ABDM submissions.",
+  "Do not claim that an external EDC, HIS, or CTRI submission has occurred. Drafts and workflow actions require human review.",
 ].join("\n");
 
 export const askClinicalAssistant = createServerFn({ method: "POST" })
@@ -39,26 +38,36 @@ export const askClinicalAssistant = createServerFn({ method: "POST" })
       typeof message.text === "string" &&
       message.text.length <= 2000,
     ).slice(-10) : [];
+    const snapshotJson = data.snapshot === undefined ? "{}" : JSON.stringify(data.snapshot);
+    if (snapshotJson.length > 20000) throw new Error("Live assistant snapshot is too large.");
     return {
       question: data.question.trim(),
       history,
+      snapshotJson,
     };
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env["GEMINI_API_KEY"];
     if (!apiKey) {
       return { answer: "The assistant is not configured yet. Add a newly rotated GEMINI_API_KEY to the server environment, then restart the app." };
     }
 
+    const redact = (value: string) => value
+      .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[redacted-email]")
+      .replace(/\b(?:\+91[- ]?)?[6-9]\d{9}\b/g, "[redacted-phone]")
+      .replace(/\b\d{12}\b/g, "[redacted-number]")
+      .replace(/\b[A-Z]{5}\d{4}[A-Z]\b/g, "[redacted-pan]");
+    const safeQuestion = redact(data.question);
+    const safeHistory = data.history.map((message) => ({ ...message, text: redact(message.text) }));
     const requestBody = JSON.stringify({
         systemInstruction: {
           parts: [{
-            text: `You are the AIIA TrialShield project-data assistant. Answer the user's question directly and concisely using only the project context below. Use plain text without Markdown formatting. If information is missing, say it is not available in this demo instead of guessing. Keep all numbers consistent with the context. Clearly distinguish illustrative capabilities from implemented ones. Never present this demo as regulatory advice or a validated clinical system. Do not request or repeat participant identifiers or protected health information.\n\nPROJECT CONTEXT\n${projectContext}`,
+            text: `You are the AIIA TrialShield project-data assistant. Answer directly using only the project context and live snapshot below. If information is missing, say it is not available. Never present the platform as regulatory advice or claim submissions were made. Drafts require human sign-off. Do not repeat identifiers or protected health information.\n\nPROJECT CONTEXT\n${projectContext}\n\nLIVE SNAPSHOT\n${data.snapshotJson}`,
           }],
         },
         contents: [
-          ...data.history.map((message) => ({ role: message.role, parts: [{ text: message.text }] })),
-          { role: "user", parts: [{ text: data.question }] },
+          ...safeHistory.map((message) => ({ role: message.role, parts: [{ text: message.text }] })),
+          { role: "user", parts: [{ text: safeQuestion }] },
         ],
         generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
     });

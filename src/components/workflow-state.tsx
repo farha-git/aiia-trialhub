@@ -8,6 +8,7 @@ import {
 
 import { getStudies } from "../lib/studies";
 import { supabase } from "../lib/supabase";
+import type { RulePackId } from "../lib/rule-packs";
 
 export const workflowStages = [
   { id: "protocol", label: "Protocol" },
@@ -36,6 +37,13 @@ export type WorkflowStudy = {
   stage: WorkflowStage;
   visitsComplete: number;
   archived: boolean;
+  startedOn?: string | undefined;
+  plannedEnd?: string | undefined;
+  ethicsApprovedOn?: string | undefined;
+  ethicsExpiresOn?: string | undefined;
+  ctriRef?: string | undefined;
+  ctriRegisteredOn?: string | undefined;
+  rulePack: RulePackId;
 };
 
 export type SafetyCaseStage = "reported" | "medical-review" | "regulatory-reporting" | "follow-up" | "ready-to-close" | "signal-review" | "closed";
@@ -47,6 +55,36 @@ export type WorkflowSafetyCase = {
   stage: SafetyCaseStage;
   owner: string;
   due: string;
+  onsetAt?: string | undefined;
+  awareAt?: string | undefined;
+  reportedAt?: string | undefined;
+  batchId?: string | undefined;
+  causality?: "Certain" | "Probable" | "Possible" | "Unlikely" | "Unrelated" | "Unassessable" | undefined;
+  prakriti?: "Vata" | "Pitta" | "Kapha" | "Vata-Pitta" | "Pitta-Kapha" | "Vata-Kapha" | "Sama" | undefined;
+  concomitantMeds?: string[] | undefined;
+  interactionSuspected?: boolean | undefined;
+  meddraTerm?: string | undefined;
+  namasteCode?: string | undefined;
+};
+
+export type InterventionBatch = {
+  id: string;
+  studyId: string;
+  formulation: string;
+  lotNo: string;
+  manufacturer: string;
+  coaStatus: "Pending" | "Verified" | "Failed";
+  heavyMetals: "Pending" | "Pass" | "Fail";
+  microbial: "Pending" | "Pass" | "Fail";
+  testedOn?: string | undefined;
+};
+
+export type Milestone = {
+  id: string;
+  studyId: string;
+  kind: "Ethics renewal" | "CTRI update" | "Annual report" | "Close-out";
+  dueOn: string;
+  doneOn?: string | undefined;
 };
 
 export type ComplianceRisk = {
@@ -65,25 +103,45 @@ export type AuditEntry = {
   action: string;
   actor: string;
   timestamp: string;
+  hash?: string | undefined;
+  prevHash?: string | undefined;
 };
 
-type NewStudy = Pick<WorkflowStudy, "title" | "phase" | "target" | "lead">;
+export type DocumentRecord = {
+  id: string;
+  studyId: string;
+  title: string;
+  version: number;
+  status: "Draft" | "In review" | "Approved" | "Superseded";
+  owner: string;
+  updatedAt: string;
+};
+
+type NewStudy = Pick<WorkflowStudy, "title" | "phase" | "target" | "lead"> & { rulePack?: RulePackId | undefined };
+
+function daysFromNow(days: number) {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function hoursFromNow(hours: number) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
 
 const initialStudies: WorkflowStudy[] = [
-  { id: "AIIA-OA-024", title: "Comparative efficacy of classical formulation in knee osteoarthritis", phase: "Phase III · Multi-centre", status: "Recruiting", risk: "High", enrolled: 136, target: 200, activatedSites: 4, lead: "Dr. Meera Nair", stage: "recruitment", visitsComplete: 0, archived: false },
-  { id: "AIIA-RA-019", title: "Integrative Ayurveda protocol for rheumatoid arthritis", phase: "Phase II · Interventional", status: "Active", risk: "Moderate", enrolled: 162, target: 200, activatedSites: 2, lead: "Dr. R. Kulkarni", stage: "recruitment", visitsComplete: 0, archived: false },
-  { id: "AIIA-DM-031", title: "Metabolic outcomes with Nishamalaki intervention", phase: "Observational · Cohort", status: "Recruiting", risk: "Low", enrolled: 92, target: 200, activatedSites: 3, lead: "Dr. S. Menon", stage: "recruitment", visitsComplete: 0, archived: false },
-  { id: "AIIA-PS-017", title: "Prakriti stratification in chronic psoriasis", phase: "Prospective · Registry", status: "Follow-up", risk: "Low", enrolled: 92, target: 100, activatedSites: 1, lead: "Dr. A. Sharma", stage: "follow-up", visitsComplete: 87, archived: false },
-  { id: "AIIA-HT-008", title: "Completed observational care-pathway study", phase: "Observational · Cohort", status: "Closed", risk: "Low", enrolled: 100, target: 100, activatedSites: 2, lead: "Dr. N. Iyer", stage: "closed", visitsComplete: 100, archived: true },
+  { id: "AIIA-OA-024", title: "Comparative efficacy of classical formulation in knee osteoarthritis", phase: "Phase III · Multi-centre", status: "Recruiting", risk: "High", enrolled: 136, target: 200, activatedSites: 4, lead: "Dr. Meera Nair", stage: "recruitment", visitsComplete: 0, archived: false, startedOn: daysFromNow(-120), plannedEnd: daysFromNow(90), ethicsApprovedOn: daysFromNow(-100), ethicsExpiresOn: daysFromNow(18), rulePack: "regulatory-ndct" },
+  { id: "AIIA-RA-019", title: "Integrative Ayurveda protocol for rheumatoid arthritis", phase: "Phase II · Interventional", status: "Active", risk: "Moderate", enrolled: 162, target: 200, activatedSites: 2, lead: "Dr. R. Kulkarni", stage: "recruitment", visitsComplete: 0, archived: false, startedOn: daysFromNow(-80), plannedEnd: daysFromNow(180), ethicsApprovedOn: daysFromNow(-70), ethicsExpiresOn: daysFromNow(90), rulePack: "academic-asu" },
+  { id: "AIIA-DM-031", title: "Metabolic outcomes with Nishamalaki intervention", phase: "Observational · Cohort", status: "Recruiting", risk: "Low", enrolled: 92, target: 200, activatedSites: 3, lead: "Dr. S. Menon", stage: "recruitment", visitsComplete: 0, archived: false, startedOn: daysFromNow(-45), plannedEnd: daysFromNow(240), ethicsApprovedOn: daysFromNow(-40), ethicsExpiresOn: daysFromNow(-2), rulePack: "institutional-sop" },
+  { id: "AIIA-PS-017", title: "Prakriti stratification in chronic psoriasis", phase: "Prospective · Registry", status: "Follow-up", risk: "Low", enrolled: 92, target: 100, activatedSites: 1, lead: "Dr. A. Sharma", stage: "follow-up", visitsComplete: 87, archived: false, startedOn: daysFromNow(-240), plannedEnd: daysFromNow(12), ethicsApprovedOn: daysFromNow(-230), ethicsExpiresOn: daysFromNow(140), rulePack: "academic-asu" },
+  { id: "AIIA-HT-008", title: "Completed observational care-pathway study", phase: "Observational · Cohort", status: "Closed", risk: "Low", enrolled: 100, target: 100, activatedSites: 2, lead: "Dr. N. Iyer", stage: "closed", visitsComplete: 100, archived: true, startedOn: daysFromNow(-500), plannedEnd: daysFromNow(-30), ethicsApprovedOn: daysFromNow(-490), ethicsExpiresOn: daysFromNow(-100), rulePack: "academic-asu" },
 ];
 
 const initialSafetyCases: WorkflowSafetyCase[] = [
-  { id: "SAE-2026-014", studyId: "AIIA-OA-024", title: "Acute hepatic injury", severity: "SAE", stage: "reported", owner: "Dr. Kavita Rao", due: "18h" },
-  { id: "SAE-2026-015", studyId: "AIIA-OA-024", title: "Unplanned hospitalisation", severity: "SAE", stage: "medical-review", owner: "Safety physician", due: "24h" },
-  { id: "SAE-2026-011", studyId: "AIIA-RA-019", title: "Hospitalisation", severity: "SAE", stage: "follow-up", owner: "Safety physician", due: "Overdue" },
-  { id: "SAE-2026-006", studyId: "AIIA-DM-031", title: "Severe hypoglycaemia", severity: "SAE", stage: "regulatory-reporting", owner: "NPvCC reviewer", due: "12h" },
-  { id: "AE-2026-031", studyId: "AIIA-RA-019", title: "Gastrointestinal symptom cluster · 6 cases", severity: "AE", stage: "signal-review", owner: "Signal review board", due: "Review" },
-  { id: "SAE-2026-009", studyId: "AIIA-PS-017", title: "Fracture after fall", severity: "SAE", stage: "closed", owner: "PI, Jaipur site", due: "Closed" },
+  { id: "SAE-2026-014", studyId: "AIIA-OA-024", title: "Acute hepatic injury", severity: "SAE", stage: "reported", owner: "Dr. Kavita Rao", due: "", awareAt: hoursFromNow(5), onsetAt: hoursFromNow(4) },
+  { id: "SAE-2026-015", studyId: "AIIA-OA-024", title: "Unplanned hospitalisation", severity: "SAE", stage: "medical-review", owner: "Safety physician", due: "", awareAt: hoursFromNow(-12), onsetAt: hoursFromNow(-14) },
+  { id: "SAE-2026-011", studyId: "AIIA-RA-019", title: "Hospitalisation", severity: "SAE", stage: "follow-up", owner: "Safety physician", due: "", awareAt: daysFromNow(-3), onsetAt: daysFromNow(-4) },
+  { id: "SAE-2026-006", studyId: "AIIA-DM-031", title: "Severe hypoglycaemia", severity: "SAE", stage: "regulatory-reporting", owner: "NPvCC reviewer", due: "", awareAt: daysFromNow(-1), onsetAt: daysFromNow(-2) },
+  { id: "AE-2026-031", studyId: "AIIA-RA-019", title: "Gastrointestinal symptom cluster · 6 cases", severity: "AE", stage: "signal-review", owner: "Signal review board", due: "", awareAt: daysFromNow(-1), onsetAt: daysFromNow(-2) },
+  { id: "SAE-2026-009", studyId: "AIIA-PS-017", title: "Fracture after fall", severity: "SAE", stage: "closed", owner: "PI, Jaipur site", due: "", awareAt: daysFromNow(-10), onsetAt: daysFromNow(-11), reportedAt: daysFromNow(-9) },
 ];
 
 const initialRisks: ComplianceRisk[] = [
@@ -117,9 +175,14 @@ function stageStatus(stage: WorkflowStage) {
 
 type WorkflowState = {
   studies: WorkflowStudy[];
+  usingOfflineData: boolean;
+  demoClockOffsetHours: number;
+  setDemoClockOffsetHours: (hours: number) => void;
   safetyCases: WorkflowSafetyCase[];
   risks: ComplianceRisk[];
   auditEntries: AuditEntry[];
+  documents: DocumentRecord[];
+  batches: InterventionBatch[];
   createStudy: (input: NewStudy) => Promise<string>;
   advanceStudy: (studyId: string) => { ok: boolean; message: string };
   recordEnrollments: (studyId: string, count: number) => { ok: boolean; message: string };
@@ -127,17 +190,36 @@ type WorkflowState = {
   addSafetyCase: (input: Omit<WorkflowSafetyCase, "id" | "stage" | "owner" | "due">) => string;
   advanceSafetyCase: (caseId: string) => void;
   resolveRisk: (riskId: string) => void;
+  submitDocument: (documentId: string) => void;
+  approveDocument: (documentId: string) => void;
+  reviseDocument: (documentId: string) => void;
   getStudy: (studyId: string) => WorkflowStudy | undefined;
   getOpenSaes: (studyId: string) => number;
 };
 
 const WorkflowContext = createContext<WorkflowState | null>(null);
 
+const initialDocuments: DocumentRecord[] = [
+  { id: "DOC-OA-001", studyId: "AIIA-OA-024", title: "Protocol and amendments", version: 3, status: "In review", owner: "Study operations", updatedAt: new Date().toISOString() },
+  { id: "DOC-OA-002", studyId: "AIIA-OA-024", title: "IEC approval letter", version: 1, status: "Approved", owner: "Compliance", updatedAt: new Date().toISOString() },
+  { id: "DOC-RA-001", studyId: "AIIA-RA-019", title: "Investigator brochure", version: 2, status: "Draft", owner: "Medical affairs", updatedAt: new Date().toISOString() },
+  { id: "DOC-DM-001", studyId: "AIIA-DM-031", title: "Consent and source records", version: 1, status: "In review", owner: "Document control", updatedAt: new Date().toISOString() },
+];
+
+const initialBatches: InterventionBatch[] = [
+  { id: "BATCH-OA-01", studyId: "AIIA-OA-024", formulation: "Classical formulation", lotNo: "OA-24-001", manufacturer: "AIIA Pharmacy", coaStatus: "Verified", heavyMetals: "Pass", microbial: "Pass", testedOn: new Date().toISOString() },
+  { id: "BATCH-RA-01", studyId: "AIIA-RA-019", formulation: "Integrative formulation", lotNo: "RA-19-004", manufacturer: "AIIA Pharmacy", coaStatus: "Pending", heavyMetals: "Pending", microbial: "Pass" },
+];
+
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [studies, setStudies] = useState<WorkflowStudy[]>([]);
+  const [studies, setStudies] = useState<WorkflowStudy[]>(initialStudies);
+  const [usingOfflineData, setUsingOfflineData] = useState(false);
+  const [demoClockOffsetHours, setDemoClockOffsetHours] = useState(0);
   const [safetyCases, setSafetyCases] = useState(initialSafetyCases);
   const [risks, setRisks] = useState(initialRisks);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [documents, setDocuments] = useState<DocumentRecord[]>(initialDocuments);
+  const [batches] = useState<InterventionBatch[]>(initialBatches);
     useEffect(() => {
     async function loadStudies() {
       try {
@@ -156,11 +238,24 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           stage: (study.stage || "protocol") as WorkflowStage,
           visitsComplete: study.visits_complete ?? 0,
           archived: study.archived ?? false,
+          startedOn: study.started_on ?? undefined,
+          plannedEnd: study.planned_end ?? undefined,
+          ethicsApprovedOn: study.ethics_approved_on ?? undefined,
+          ethicsExpiresOn: study.ethics_expires_on ?? undefined,
+          ctriRef: study.ctri_ref ?? undefined,
+          ctriRegisteredOn: study.ctri_registered_on ?? undefined,
+          rulePack: study.rule_pack ?? "academic-asu",
         }));
 
-        setStudies(mappedStudies);
+        if (mappedStudies.length > 0) {
+          setStudies(mappedStudies);
+          setUsingOfflineData(false);
+        } else {
+          setUsingOfflineData(true);
+        }
       } catch (error) {
         console.error("Failed to load studies:", error);
+        setUsingOfflineData(true);
       }
     }
 
@@ -169,7 +264,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   
 
   const recordAudit = (studyId: string, action: string) => {
-    setAuditEntries((entries) => [{ id: `${Date.now()}-${Math.random()}`, studyId, action, actor: "Research Operations (demo)", timestamp: new Date().toISOString() }, ...entries]);
+    const id = `${Date.now()}-${Math.random()}`;
+    const timestamp = new Date().toISOString();
+    setAuditEntries((entries) => {
+      const entry: AuditEntry = { id, studyId, action, actor: "Research Operations", timestamp, prevHash: entries[0]?.hash };
+      void crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${entry.prevHash ?? ""}${JSON.stringify(entry)}`)).then((digest) => {
+        const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        setAuditEntries((current) => current.map((item) => item.id === id ? { ...item, hash } : item));
+      }).catch(() => undefined);
+      return [entry, ...entries];
+    });
   };
 
  const createStudy = async (input: NewStudy) => {
@@ -217,6 +321,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     stage: data.stage as WorkflowStage,
     visitsComplete: data.visits_complete,
     archived: data.archived,
+    rulePack: input.rulePack ?? "academic-asu",
   };
 
   setStudies((items) => [...items, newStudy]);
@@ -288,11 +393,38 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     recordAudit(risk.studyId, `Compliance item resolved: ${risk.title}`);
   };
 
+  const submitDocument = (documentId: string) => {
+    const document = documents.find((item) => item.id === documentId);
+    if (!document || document.status !== "Draft") return;
+    setDocuments((items) => items.map((item) => item.id === documentId ? { ...item, status: "In review", updatedAt: new Date().toISOString() } : item));
+    recordAudit(document.studyId, `Document submitted: ${document.title} v${document.version}`);
+  };
+
+  const approveDocument = (documentId: string) => {
+    const document = documents.find((item) => item.id === documentId);
+    if (!document || document.status !== "In review") return;
+    setDocuments((items) => items.map((item) => item.id === documentId ? { ...item, status: "Approved", updatedAt: new Date().toISOString() } : item));
+    recordAudit(document.studyId, `Document approved: ${document.title} v${document.version}`);
+  };
+
+  const reviseDocument = (documentId: string) => {
+    const document = documents.find((item) => item.id === documentId);
+    if (!document) return;
+    const revised: DocumentRecord = { ...document, id: `${document.id}-v${document.version + 1}`, version: document.version + 1, status: "Draft", updatedAt: new Date().toISOString() };
+    setDocuments((items) => [...items.map((item) => item.id === documentId ? { ...item, status: "Superseded" as const } : item), revised]);
+    recordAudit(document.studyId, `Document revised: ${document.title} v${revised.version}`);
+  };
+
   const value: WorkflowState = {
     studies,
+    usingOfflineData,
+    demoClockOffsetHours,
+    setDemoClockOffsetHours,
     safetyCases,
     risks,
     auditEntries,
+    documents,
+    batches,
     createStudy,
     advanceStudy,
     recordEnrollments,
@@ -300,6 +432,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     addSafetyCase,
     advanceSafetyCase,
     resolveRisk,
+    submitDocument,
+    approveDocument,
+    reviseDocument,
     getStudy: (studyId) => studies.find((study) => study.id === studyId),
     getOpenSaes: (studyId) => safetyCases.filter((item) => item.studyId === studyId && item.severity === "SAE" && item.stage !== "closed").length,
   };

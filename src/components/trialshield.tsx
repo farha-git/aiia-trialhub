@@ -18,6 +18,8 @@ import {
 import { useEffect, useId, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useWorkflow } from "@/components/workflow-state";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 export const navItems = [
@@ -28,7 +30,17 @@ export const navItems = [
   ["Analytics", "/analytics"],
   ["Documents", "/documents"],
   ["Exports", "/exports"],
+  ["Admin", "/admin"],
 ] as const;
+
+const roleNavAccess = {
+  ADMIN: new Set(navItems.map(([label]) => label)),
+  PI: new Set(["Portfolio", "Studies", "Documents"]),
+  CRC: new Set(["Portfolio", "Studies"]),
+  SAFETY_OFFICER: new Set(["Portfolio", "Safety"]),
+  COMPLIANCE_OFFICER: new Set(["Portfolio", "Compliance", "Documents"]),
+  DATA_MANAGER: new Set(["Portfolio", "Analytics", "Exports"]),
+} as const;
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -47,13 +59,15 @@ export function Brand({ compact = false }: { compact?: boolean }) {
 
 export function PlatformHeader() {
   const [open, setOpen] = useState(false);
+  const { usingOfflineData } = useWorkflow();
+  const { profile, signOut } = useAuth();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-background/95 backdrop-blur-xl">
       <div className="mx-auto grid h-16 max-w-[1480px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 lg:grid-cols-[220px_minmax(0,1fr)_220px] lg:px-8">
         <Brand compact />
         <nav className="hidden items-center justify-center gap-1 lg:flex" aria-label="Platform navigation">
-          {navItems.map(([label, to]) => {
+          {navItems.filter(([label]) => Boolean(profile?.role && roleNavAccess[profile.role].has(label))).map(([label, to]) => {
             const active = pathname === to || (to === "/studies" && pathname.startsWith("/studies/"));
             return (
               <Link key={to} to={to} className={cn("rounded-md px-3 py-2 text-[13px] font-medium transition-colors", active ? "bg-primary/8 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
@@ -63,13 +77,14 @@ export function PlatformHeader() {
           })}
         </nav>
         <div className="flex items-center justify-end gap-1">
+          {usingOfflineData && <span className="hidden rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-[10px] font-semibold text-warning-foreground sm:inline-flex">Offline data</span>}
           <Button asChild variant="ghost" size="icon" aria-label="Search studies"><Link to="/studies"><Search className="size-4" /></Link></Button>
           <Button asChild variant="ghost" size="icon" aria-label="Open compliance notifications" className="relative"><Link to="/compliance"><Bell className="size-4" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-risk" /></Link></Button>
-          <div className="ml-2 hidden size-8 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground sm:grid">AK</div>
+          <div className="ml-2 hidden items-center gap-2 sm:flex"><span className="max-w-32 truncate text-xs font-medium text-foreground">{profile?.full_name || profile?.email || "Research user"}</span><button type="button" title="Sign out" onClick={() => void signOut()} className="grid size-8 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">{profile?.full_name?.slice(0, 2).toUpperCase() ?? "U"}</button></div>
           <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Toggle navigation" onClick={() => setOpen((value) => !value)}>{open ? <X className="size-5" /> : <Menu className="size-5" />}</Button>
         </div>
       </div>
-      {open && <nav className="grid grid-cols-2 gap-1 border-t border-border bg-background p-3 lg:hidden">{navItems.map(([label, to]) => <Link key={to} to={to} onClick={() => setOpen(false)} className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted">{label}</Link>)}</nav>}
+      {open && <nav className="grid grid-cols-2 gap-1 border-t border-border bg-background p-3 lg:hidden">{navItems.filter(([label]) => Boolean(profile?.role && roleNavAccess[profile.role].has(label))).map(([label, to]) => <Link key={to} to={to} onClick={() => setOpen(false)} className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted">{label}</Link>)}</nav>}
     </header>
   );
 }

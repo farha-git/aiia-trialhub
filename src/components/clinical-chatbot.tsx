@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { askClinicalAssistant } from "@/lib/clinical-chat.server";
+import { useWorkflow } from "@/components/workflow-state";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -24,11 +25,12 @@ function createMessage(role: ChatMessage["role"], text: string): ChatMessage {
 
 export function ClinicalChatbot() {
   const askAssistant = useServerFn(askClinicalAssistant);
+  const { studies, safetyCases } = useWorkflow();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    createMessage("assistant", "Hello. I can answer questions about the synthetic study portfolio, safety items, compliance status, KPIs, and report exports."),
+    createMessage("assistant", "Hello. I can answer questions about the study portfolio, safety items, compliance status, KPIs, and report exports."),
   ]);
   const messageListRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +51,12 @@ export function ClinicalChatbot() {
     setLoading(true);
 
     try {
-      const result = await askAssistant({ data: { question, history } });
+      const snapshot = {
+        capturedAt: new Date().toISOString(),
+        studies: studies.map((study) => ({ id: study.id, title: study.title, stage: study.stage, rulePack: study.rulePack, enrolled: study.enrolled, target: study.target })),
+        safetyCases: safetyCases.map((item) => ({ id: item.id, studyId: item.studyId, severity: item.severity, stage: item.stage, due: item.due })),
+      };
+      const result = await askAssistant({ data: { question, history, snapshot } });
       setMessages((current) => [...current, createMessage("assistant", result.answer)]);
     } catch {
       setMessages((current) => [...current, createMessage("assistant", "I couldn't reach the project assistant. Check the server configuration and try again.")]);
@@ -77,7 +84,7 @@ export function ClinicalChatbot() {
       </div>
 
       <div className="border-t border-border bg-surface p-3">
-        <p className="mb-2 px-1 text-[10px] leading-4 text-muted-foreground">Demo data only. Do not enter participant names, IDs, or other identifiable health information. Messages are sent to Gemini.</p>
+        <p className="mb-2 px-1 text-[10px] leading-4 text-muted-foreground">Do not enter participant names, IDs, or other identifiable health information. Messages are sent to Gemini.</p>
         <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
           <label className="sr-only" htmlFor="clinical-chat-input">Ask the project assistant</label>
           <Textarea id="clinical-chat-input" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="Ask about studies, safety, or compliance..." maxLength={2000} rows={2} disabled={loading} className="min-h-10 max-h-28 resize-none rounded-lg bg-background text-sm" />

@@ -6,9 +6,11 @@ import { AttentionItem, PlatformPage, ProgressBar, StatusPill, Timeline } from "
 import { Button } from "@/components/ui/button";
 import { getStudyProgress, useWorkflow } from "@/components/workflow-state";
 import { buildClinicalReportRows, downloadClinicalReport } from "@/lib/clinical-report";
+import { useAuth } from "@/lib/auth-context";
 
 export function PortfolioWorkspace() {
   const workflow = useWorkflow();
+  const { profile } = useAuth();
   const reportRows = buildClinicalReportRows(workflow.studies, workflow.safetyCases);
   const activeStudies = workflow.studies.filter((study) => !study.archived);
   const totalEnrolled = reportRows.reduce((total, row) => total + row.enrolled, 0);
@@ -20,11 +22,12 @@ export function PortfolioWorkspace() {
   const meanCompleteness = reportRows.length ? Math.round(reportRows.reduce((total, row) => total + row.dataCompleteness, 0) / reportRows.length) : 0;
   const priorities = [
     ...openSaes.slice(0, 2).map((item) => ({ key: item.id, severity: "critical" as const, title: `${item.id} · ${item.title}`, meta: `${item.studyId} · ${item.stage.replaceAll("-", " ")} · Due ${item.due}`, owner: item.owner, action: "Advance", onAction: () => { workflow.advanceSafetyCase(item.id); toast.success(`${item.id} moved to the next review step.`); } })),
-    ...openRisks.slice(0, 2).map((risk) => ({ key: risk.id, severity: risk.severity === "High" ? "critical" as const : "warning" as const, title: risk.title, meta: `${risk.studyId} · ${risk.detail}`, owner: risk.owner, action: "Resolve", onAction: () => { workflow.resolveRisk(risk.id); toast.success(`${risk.title} resolved in this demo session.`); } })),
+    ...openRisks.slice(0, 2).map((risk) => ({ key: risk.id, severity: risk.severity === "High" ? "critical" as const : "warning" as const, title: risk.title, meta: `${risk.studyId} · ${risk.detail}`, owner: risk.owner, action: "Resolve", onAction: () => { workflow.resolveRisk(risk.id); toast.success(`${risk.title} resolved.`); } })),
   ].slice(0, 3);
   const recentActions = workflow.auditEntries.slice(0, 3).map((entry) => ({ title: entry.action, detail: `${entry.studyId} · ${entry.actor}`, time: new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), state: "done" as const }));
 
-  return <PlatformPage eyebrow="National research portfolio · live demo session" title="Good morning, Dr. Kumar" description={`${priorities.length} matters need attention. Trial stages and KPI totals update as actions are recorded in this session.`} actions={<Button variant="secondary" onClick={() => { if (downloadClinicalReport("pdf", reportRows)) toast.success("Print-ready weekly brief opened. Choose Save as PDF in the print dialog."); else toast.error("Allow pop-ups to open the weekly brief."); }}>Weekly brief<ArrowRight className="size-4" /></Button>}>
+  const displayName = profile?.full_name || profile?.email || "Research user";
+  return <PlatformPage eyebrow={`National research portfolio · ${profile?.role ?? "Account"}`} title={`Good morning, ${displayName}`} description={`${priorities.length} matters need attention. Trial stages and KPI totals update as actions are recorded.`} actions={<Button variant="secondary" onClick={() => { if (downloadClinicalReport("pdf", reportRows)) toast.success("Print-ready weekly brief opened. Choose Save as PDF in the print dialog."); else toast.error("Allow pop-ups to open the weekly brief."); }}>Weekly brief<ArrowRight className="size-4" /></Button>}>
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,.72fr)]">
       <div className="space-y-6">
         <section className="rounded-lg border border-border bg-surface p-5 shadow-xs sm:p-6">
