@@ -7,7 +7,7 @@ import { PlatformHeader, ProgressBar, StatusPill, Timeline } from "@/components/
 import { AuthGuard } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getCurrentStageIndex, getStudyProgress, useWorkflow, workflowStages, type WorkflowStudy, type WorkflowSafetyCase, type ComplianceRisk, type AuditEntry } from "@/components/workflow-state";
+import { getCurrentStageIndex, getStudyProgress, useWorkflow, workflowStages, type WorkflowStudy, type WorkflowSafetyCase, type ComplianceRisk, type AuditEntry, type ConsentRecord } from "@/components/workflow-state";
 import { useAuth } from "@/lib/auth-context";
 import { can } from "@/lib/permissions";
 
@@ -126,21 +126,23 @@ function StudyDetail() {
               </section>
               <section className="rounded-lg border border-border bg-surface p-5"><FileText className="size-5 text-secondary" /><h2 className="mt-4 text-sm font-semibold">Study record</h2><p className="mt-2 text-xs leading-5 text-muted-foreground">Enrollment target {study.target} · {study.activatedSites} active sites · {study.visitsComplete} of {study.enrolled} follow-up visits complete.</p></section>
             </aside>
-          </div> : <StudyTabPanel tab={tab} study={study} safetyCases={studyCases} risks={allStudyRisks} auditEntries={studyAudit} onRecordEnrollments={workflow.recordEnrollments} onRecordVisits={workflow.recordVisits} onAdvanceSafetyCase={workflow.advanceSafetyCase} onResolveRisk={workflow.resolveRisk} />}
+          </div> : <StudyTabPanel tab={tab} study={study} safetyCases={studyCases} risks={allStudyRisks} auditEntries={studyAudit} consentRecords={workflow.consentRecords.filter((record) => record.studyId === studyId)} onRecordEnrollments={workflow.recordEnrollments} onRecordVisits={workflow.recordVisits} onRecordConsent={workflow.recordConsent} onAdvanceSafetyCase={workflow.advanceSafetyCase} onResolveRisk={workflow.resolveRisk} />}
         </div>
       </main>
     </div>
   );
 }
 
-function StudyTabPanel({ tab, study, safetyCases, risks, auditEntries, onRecordEnrollments, onRecordVisits, onAdvanceSafetyCase, onResolveRisk }: {
+function StudyTabPanel({ tab, study, safetyCases, risks, auditEntries, consentRecords, onRecordEnrollments, onRecordVisits, onRecordConsent, onAdvanceSafetyCase, onResolveRisk }: {
   tab: string;
   study: WorkflowStudy;
   safetyCases: WorkflowSafetyCase[];
   risks: ComplianceRisk[];
   auditEntries: AuditEntry[];
+  consentRecords: ConsentRecord[];
   onRecordEnrollments: (studyId: string, count: number) => { ok: boolean; message: string };
   onRecordVisits: (studyId: string, count: number) => { ok: boolean; message: string };
+  onRecordConsent: (input: Omit<ConsentRecord, "id" | "timestamp">) => ConsentRecord;
   onAdvanceSafetyCase: (caseId: string) => void;
   onResolveRisk: (riskId: string) => void;
 }) {
@@ -158,12 +160,7 @@ function StudyTabPanel({ tab, study, safetyCases, risks, auditEntries, onRecordE
     closed: "Closed",
   };
 
-  if (tab === "Participants") return <section className="rounded-lg border border-border bg-surface p-6">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Enrollment</p><h2 className="mt-1 font-display text-xl font-semibold">{study.enrolled} of {study.target} participants</h2><p className="mt-1 text-sm text-muted-foreground">Enrollment is recorded in batches and linked to this study's session audit trail.</p></div><StatusPill tone={study.stage === "recruitment" ? "good" : "neutral"}>{study.stage === "recruitment" ? "Recruiting" : "Recruitment stage complete"}</StatusPill></div>
-    <div className="mt-6"><ProgressBar value={getStudyProgress(study)} /></div>
-    {study.stage === "recruitment" && study.enrolled < study.target ? <div className="mt-6 flex flex-wrap items-end gap-3"><label className="text-sm font-medium">Participants to enroll<Input type="number" min={1} max={study.target - study.enrolled} value={batch} onChange={(event) => setBatch(Number(event.target.value))} className="mt-1 w-32" /></label><Button disabled={!can(role, "enrollment:update")} onClick={() => reportResult(onRecordEnrollments(study.id, batch))}>Record enrollment</Button></div> : <p className="mt-5 text-sm text-muted-foreground">To enter recruitment, complete protocol, ethics, CTRI registration, and site activation in Overview.</p>}
-    <div className="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">Participant-level identifiers are intentionally not included in this workflow.</div>
-  </section>;
+  if (tab === "Participants") return <ConsentPanel study={study} consentRecords={consentRecords} onRecordConsent={onRecordConsent} onRecordEnrollments={onRecordEnrollments} />;
 
   if (tab === "Visits") return <section className="rounded-lg border border-border bg-surface p-6">
     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Visit schedule</p><h2 className="mt-1 font-display text-xl font-semibold">{study.visitsComplete} of {study.enrolled} follow-up visits complete</h2><p className="mt-1 text-sm text-muted-foreground">Record completed follow-up visits in batches. Close-out is gated until enrolled participants have completed follow-up.</p>
@@ -192,4 +189,56 @@ function StudyTabPanel({ tab, study, safetyCases, risks, auditEntries, onRecordE
     <div className="flex items-center gap-3"><FileText className="size-5 text-secondary" /><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Controlled documents</p><h2 className="mt-1 font-display text-xl font-semibold">Study document checklist</h2></div></div>
     <div className="mt-6 divide-y divide-border">{[["Protocol and amendments", stageIndex > 0 ? "Ready for review" : "Draft required"], ["IEC approval letter", stageIndex > 1 ? "Recorded" : "Pending"], ["CTRI registration record", stageIndex > 2 ? "Recorded" : "Pending"], ["Site delegation and training", stageIndex > 3 ? "Site activated" : "Pending activation"], ["Consent and visit source records", study.enrolled > 0 ? "Collection in progress" : "Pending first participant"]].map(([document, status]) => <div key={document} className="flex items-center justify-between gap-4 py-4"><span className="text-sm font-medium">{document}</span><StatusPill tone={status === "Recorded" || status === "Ready for review" || status === "Site activated" ? "good" : "neutral"}>{status}</StatusPill></div>)}</div>
   </section>;
+}
+
+const consentLanguages = {
+  en: { name: "English", title: "Participant information and consent", intro: "You are invited to take part in this research study. Participation is voluntary. The study team will explain the purpose, procedures, possible benefits, risks, and alternatives before you decide.", voluntary: "You may refuse or withdraw at any time without losing your usual care or benefits.", data: "Your study information will be coded and handled only by authorised study staff according to the approved protocol.", understand: "I have had the opportunity to ask questions and received answers I understand." },
+  hi: { name: "हिन्दी", title: "प्रतिभागी जानकारी और सहमति", intro: "आपको इस शोध अध्ययन में भाग लेने के लिए आमंत्रित किया गया है। भाग लेना स्वैच्छिक है। निर्णय लेने से पहले अध्ययन दल आपको उद्देश्य, प्रक्रिया, संभावित लाभ, जोखिम और विकल्प समझाएगा।", voluntary: "आप बिना अपनी नियमित देखभाल या लाभ खोए कभी भी मना कर सकते हैं या भाग लेना बंद कर सकते हैं।", data: "आपकी अध्ययन जानकारी को कोड किया जाएगा और स्वीकृत प्रोटोकॉल के अनुसार केवल अधिकृत अध्ययन कर्मचारी संभालेंगे।", understand: "मुझे प्रश्न पूछने का अवसर मिला है और मुझे समझ में आने वाले उत्तर मिले हैं।" },
+  bn: { name: "বাংলা", title: "অংশগ্রহণকারীর তথ্য ও সম্মতি", intro: "আপনাকে এই গবেষণায় অংশগ্রহণের জন্য আমন্ত্রণ জানানো হচ্ছে। অংশগ্রহণ স্বেচ্ছামূলক। সিদ্ধান্ত নেওয়ার আগে গবেষণা দল উদ্দেশ্য, পদ্ধতি, সম্ভাব্য উপকার, ঝুঁকি ও বিকল্প ব্যাখ্যা করবে।", voluntary: "আপনি আপনার স্বাভাবিক চিকিৎসা বা সুবিধা না হারিয়ে যেকোনো সময় না বলতে বা অংশগ্রহণ বন্ধ করতে পারেন।", data: "অনুমোদিত প্রোটোকল অনুযায়ী আপনার গবেষণার তথ্য কোড করা হবে এবং শুধুমাত্র অনুমোদিত কর্মীরা ব্যবহার করবেন।", understand: "প্রশ্ন করার সুযোগ পেয়েছি এবং আমি বুঝতে পেরেছি এমন উত্তর পেয়েছি।" },
+  mr: { name: "मराठी", title: "सहभागी माहिती आणि संमती", intro: "या संशोधन अभ्यासात सहभागी होण्यासाठी आपल्याला आमंत्रित केले आहे. सहभाग स्वेच्छेचा आहे. निर्णय घेण्यापूर्वी अभ्यासाचा उद्देश, प्रक्रिया, संभाव्य फायदे, धोके आणि पर्याय समजावले जातील.", voluntary: "आपली नियमित काळजी किंवा लाभ न गमावता आपण कधीही नकार देऊ शकता किंवा सहभाग थांबवू शकता.", data: "मंजूर प्रोटोकॉलनुसार आपली अभ्यासमाहिती कोड केली जाईल आणि केवळ अधिकृत कर्मचारी ती हाताळतील.", understand: "मला प्रश्न विचारण्याची संधी मिळाली आणि मला समजणारी उत्तरे मिळाली." },
+  ta: { name: "தமிழ்", title: "பங்கேற்பாளர் தகவல் மற்றும் சம்மதம்", intro: "இந்த ஆய்வில் பங்கேற்க உங்களுக்கு அழைப்பு விடுக்கப்படுகிறது. பங்கேற்பு விருப்பத்திற்குரியது. முடிவு செய்வதற்கு முன் நோக்கம், நடைமுறைகள், சாத்தியமான நன்மைகள், அபாயங்கள் மற்றும் மாற்றுகள் விளக்கப்படும்.", voluntary: "உங்கள் வழக்கமான சிகிச்சை அல்லது நன்மைகளை இழக்காமல் எந்த நேரத்திலும் மறுக்கலாம் அல்லது விலகலாம்.", data: "அங்கீகரிக்கப்பட்ட நெறிமுறையின்படி உங்கள் ஆய்வுத் தகவல் குறியிடப்பட்டு, அங்கீகரிக்கப்பட்ட பணியாளர்களால் மட்டுமே கையாளப்படும்.", understand: "கேள்விகள் கேட்க எனக்கு வாய்ப்பு கிடைத்தது; புரியும் பதில்கள் கிடைத்தன." },
+  te: { name: "తెలుగు", title: "పాల్గొనేవారి సమాచారం మరియు సమ్మతి", intro: "ఈ పరిశోధనా అధ్యయనంలో పాల్గొనమని మిమ్మల్ని ఆహ్వానిస్తున్నాము. పాల్గొనడం స్వచ్ఛందం. నిర్ణయం తీసుకునే ముందు ఉద్దేశ్యం, విధానాలు, ప్రయోజనాలు, ప్రమాదాలు మరియు ప్రత్యామ్నాయాలను బృందం వివరిస్తుంది.", voluntary: "మీ సాధారణ సంరక్షణ లేదా ప్రయోజనాలను కోల్పోకుండా ఎప్పుడైనా నిరాకరించవచ్చు లేదా వైదొలగవచ్చు.", data: "ఆమోదించిన ప్రోటోకాల్ ప్రకారం మీ అధ్యయన సమాచారం కోడ్ చేయబడుతుంది మరియు అధీకృత సిబ్బంది మాత్రమే నిర్వహిస్తారు.", understand: "ప్రశ్నలు అడిగే అవకాశం నాకు లభించింది మరియు అర్థమయ్యే సమాధానాలు పొందాను." },
+  gu: { name: "ગુજરાતી", title: "સહભાગી માહિતી અને સંમતિ", intro: "આ સંશોધન અભ્યાસમાં ભાગ લેવા માટે તમને આમંત્રિત કરવામાં આવે છે. ભાગ લેવો સ્વૈચ્છિક છે. નિર્ણય લેતા પહેલાં ટીમ હેતુ, પ્રક્રિયા, સંભવિત લાભ, જોખમો અને વિકલ્પો સમજાવશે.", voluntary: "તમારી સામાન્ય સારવાર અથવા લાભ ગુમાવ્યા વિના તમે કોઈપણ સમયે ના પાડી શકો અથવા ભાગ લેવાનું બંધ કરી શકો છો.", data: "મંજૂર પ્રોટોકોલ મુજબ તમારી અભ્યાસ માહિતી કોડ કરવામાં આવશે અને માત્ર અધિકૃત કર્મચારીઓ તેને સંભાળશે.", understand: "મને પ્રશ્નો પૂછવાની તક મળી અને મને સમજાય તેવા જવાબો મળ્યા." },
+  kn: { name: "ಕನ್ನಡ", title: "ಭಾಗವಹಿಸುವವರ ಮಾಹಿತಿ ಮತ್ತು ಸಮ್ಮತಿ", intro: "ಈ ಸಂಶೋಧನಾ ಅಧ್ಯಯನದಲ್ಲಿ ಭಾಗವಹಿಸಲು ನಿಮ್ಮನ್ನು ಆಹ್ವಾನಿಸಲಾಗಿದೆ. ಭಾಗವಹಿಸುವುದು ಸ್ವಯಂಪ್ರೇರಿತ. ನಿರ್ಧಾರಕ್ಕೆ ಮೊದಲು ಉದ್ದೇಶ, ವಿಧಾನಗಳು, ಪ್ರಯೋಜನಗಳು, ಅಪಾಯಗಳು ಮತ್ತು ಪರ್ಯಾಯಗಳನ್ನು ತಂಡ ವಿವರಿಸುತ್ತದೆ.", voluntary: "ನಿಮ್ಮ ಸಾಮಾನ್ಯ ಆರೈಕೆ ಅಥವಾ ಪ್ರಯೋಜನಗಳನ್ನು ಕಳೆದುಕೊಳ್ಳದೆ ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ನಿರಾಕರಿಸಬಹುದು ಅಥವಾ ಹಿಂದೆ ಸರಿಯಬಹುದು.", data: "ಅನುಮೋದಿತ ಪ್ರೋಟೋಕಾಲ್ ಪ್ರಕಾರ ನಿಮ್ಮ ಅಧ್ಯಯನ ಮಾಹಿತಿಯನ್ನು ಕೋಡ್ ಮಾಡಲಾಗುತ್ತದೆ ಮತ್ತು ಅಧಿಕೃತ ಸಿಬ್ಬಂದಿ ಮಾತ್ರ ನಿರ್ವಹಿಸುತ್ತಾರೆ.", understand: "ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಲು ನನಗೆ ಅವಕಾಶ ದೊರೆತಿದೆ ಮತ್ತು ಅರ್ಥವಾಗುವ ಉತ್ತರಗಳನ್ನು ಪಡೆದಿದ್ದೇನೆ." },
+  ml: { name: "മലയാളം", title: "പങ്കാളിയുടെ വിവരങ്ങളും സമ്മതവും", intro: "ഈ ഗവേഷണ പഠനത്തിൽ പങ്കെടുക്കാൻ നിങ്ങളെ ക്ഷണിക്കുന്നു. പങ്കെടുക്കുന്നത് സ്വമേധയാ ആണ്. തീരുമാനിക്കുന്നതിന് മുമ്പ് ഉദ്ദേശ്യം, നടപടികൾ, ഗുണങ്ങൾ, അപകടസാധ്യതകൾ, മറ്റ് മാർഗങ്ങൾ എന്നിവ പഠനസംഘം വിശദീകരിക്കും.", voluntary: "നിങ്ങളുടെ സാധാരണ പരിചരണമോ ആനുകൂല്യങ്ങളോ നഷ്ടപ്പെടാതെ എപ്പോൾ വേണമെങ്കിലും നിരസിക്കുകയോ പിന്മാറുകയോ ചെയ്യാം.", data: "അംഗീകരിച്ച പ്രോട്ടോക്കോൾ പ്രകാരം നിങ്ങളുടെ പഠനവിവരങ്ങൾ കോഡ് ചെയ്ത്, അധികാരമുള്ള ജീവനക്കാർ മാത്രം കൈകാര്യം ചെയ്യും.", understand: "ചോദ്യങ്ങൾ ചോദിക്കാൻ എനിക്ക് അവസരം ലഭിക്കുകയും മനസ്സിലാകുന്ന ഉത്തരങ്ങൾ ലഭിക്കുകയും ചെയ്തു." },
+  pa: { name: "ਪੰਜਾਬੀ", title: "ਭਾਗੀਦਾਰ ਜਾਣਕਾਰੀ ਅਤੇ ਸਹਿਮਤੀ", intro: "ਤੁਹਾਨੂੰ ਇਸ ਖੋਜ ਅਧਿਐਨ ਵਿੱਚ ਹਿੱਸਾ ਲੈਣ ਲਈ ਸੱਦਾ ਦਿੱਤਾ ਗਿਆ ਹੈ। ਹਿੱਸਾ ਲੈਣਾ ਸਵੈਇੱਛਿਕ ਹੈ। ਫੈਸਲਾ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਟੀਮ ਮਕਸਦ, ਪ੍ਰਕਿਰਿਆਵਾਂ, ਸੰਭਾਵੀ ਲਾਭ, ਖਤਰੇ ਅਤੇ ਵਿਕਲਪ ਸਮਝਾਏਗੀ।", voluntary: "ਤੁਸੀਂ ਆਪਣੀ ਆਮ ਦੇਖਭਾਲ ਜਾਂ ਲਾਭ ਗੁਆਏ ਬਿਨਾਂ ਕਿਸੇ ਵੀ ਸਮੇਂ ਇਨਕਾਰ ਜਾਂ ਵਾਪਸ ਹੋ ਸਕਦੇ ਹੋ।", data: "ਮਨਜ਼ੂਰਸ਼ੁਦਾ ਪ੍ਰੋਟੋਕੋਲ ਅਨੁਸਾਰ ਤੁਹਾਡੀ ਅਧਿਐਨ ਜਾਣਕਾਰੀ ਕੋਡ ਕੀਤੀ ਜਾਵੇਗੀ ਅਤੇ ਸਿਰਫ਼ ਅਧਿਕਾਰਤ ਕਰਮਚਾਰੀ ਇਸਨੂੰ ਸੰਭਾਲਣਗੇ।", understand: "ਮੈਨੂੰ ਸਵਾਲ ਪੁੱਛਣ ਦਾ ਮੌਕਾ ਮਿਲਿਆ ਅਤੇ ਮੈਨੂੰ ਸਮਝ ਆਉਣ ਵਾਲੇ ਜਵਾਬ ਮਿਲੇ।" },
+} as const;
+
+type ConsentLanguage = keyof typeof consentLanguages;
+
+function ConsentPanel({ study, consentRecords, onRecordConsent, onRecordEnrollments }: { study: WorkflowStudy; consentRecords: ConsentRecord[]; onRecordConsent: (input: Omit<ConsentRecord, "id" | "timestamp">) => ConsentRecord; onRecordEnrollments: (studyId: string, count: number) => { ok: boolean; message: string } }) {
+  const { role } = useAuth();
+  const [language, setLanguage] = useState<ConsentLanguage>("hi");
+  const [participantCode, setParticipantCode] = useState("");
+  const [participantMark, setParticipantMark] = useState("");
+  const [staffInitials, setStaffInitials] = useState("");
+  const [understood, setUnderstood] = useState(false);
+  const [voluntary, setVoluntary] = useState(false);
+  const [enrollmentBatch, setEnrollmentBatch] = useState(1);
+  const content = consentLanguages[language];
+  const saveConsent = (decision: ConsentRecord["decision"]) => {
+    if (!participantCode.trim() || !participantMark.trim() || !staffInitials.trim() || !understood || !voluntary) {
+      toast.warning("Complete the participant code, initials, staff initials, and both confirmations first.");
+      return;
+    }
+    onRecordConsent({ studyId: study.id, participantCode: participantCode.trim(), language, languageName: content.name, documentVersion: "ICF-v1.0", decision, participantMark: participantMark.trim(), staffInitials: staffInitials.trim(), });
+    toast.success(decision === "consented" ? "Consent recorded in this session." : "Declined decision recorded in this session.");
+    setParticipantCode(""); setParticipantMark(""); setStaffInitials(""); setUnderstood(false); setVoluntary(false);
+  };
+  return <div className="space-y-6">
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Enrollment and consent</p><h2 className="mt-1 font-display text-xl font-semibold">{study.enrolled} of {study.target} participants</h2><p className="mt-1 text-sm text-muted-foreground">Complete consent before recording a participant. Identifiers remain in this browser session only.</p></div><StatusPill tone={study.stage === "recruitment" ? "good" : "neutral"}>{study.stage === "recruitment" ? "Recruiting" : "Recruitment stage complete"}</StatusPill></div>
+      <div className="mt-6"><ProgressBar value={getStudyProgress(study)} /></div>
+      {study.stage === "recruitment" && study.enrolled < study.target && <div className="mt-5 flex flex-wrap items-end gap-3"><label className="text-sm font-medium">Participants to enroll<Input type="number" min={1} max={study.target - study.enrolled} value={enrollmentBatch} onChange={(event) => setEnrollmentBatch(Number(event.target.value))} className="mt-1 w-32" /></label><Button disabled={!can(role, "enrollment:update")} onClick={() => { const result = onRecordEnrollments(study.id, enrollmentBatch); result.ok ? toast.success(result.message) : toast.warning(result.message); }}>Record enrollment</Button></div>}
+    </section>
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Multilingual ICF template</p><h2 className="mt-1 font-display text-xl font-semibold">{content.title}</h2><p className="mt-1 text-xs text-muted-foreground">Document version ICF-v1.0 · Select the participant's preferred language before reading aloud.</p></div><label className="text-xs font-medium">Language<select value={language} onChange={(event) => setLanguage(event.target.value as ConsentLanguage)} className="mt-1 block h-10 rounded-md border border-input bg-background px-3 text-sm">{Object.entries(consentLanguages).map(([code, item]) => <option key={code} value={code}>{item.name}</option>)}</select></label></div>
+      <div className="mt-6 grid gap-3 text-sm leading-6"><p>{content.intro}</p><p>{content.voluntary}</p><p>{content.data}</p></div>
+      <div className="mt-6 grid gap-4 border-t border-border pt-5 sm:grid-cols-3"><label className="text-xs font-medium">Participant code<Input value={participantCode} onChange={(event) => setParticipantCode(event.target.value)} placeholder="e.g. AIIA-001" className="mt-1" /></label><label className="text-xs font-medium">Participant initials / mark<Input value={participantMark} onChange={(event) => setParticipantMark(event.target.value)} placeholder="Initials or mark" className="mt-1" /></label><label className="text-xs font-medium">Staff initials<Input value={staffInitials} onChange={(event) => setStaffInitials(event.target.value)} placeholder="Staff initials" className="mt-1" /></label></div>
+      <div className="mt-5 grid gap-3 text-sm"><label className="flex gap-2"><input type="checkbox" checked={understood} onChange={(event) => setUnderstood(event.target.checked)} className="mt-1" />{content.understand}</label><label className="flex gap-2"><input type="checkbox" checked={voluntary} onChange={(event) => setVoluntary(event.target.checked)} className="mt-1" />{content.voluntary}</label></div>
+      <div className="mt-6 flex flex-wrap gap-3"><Button disabled={!can(role, "consent:update")} onClick={() => saveConsent("consented")}>Record consent</Button><Button disabled={!can(role, "consent:update")} variant="secondary" onClick={() => saveConsent("declined")}>Record declined</Button></div>
+      <p className="mt-4 text-xs leading-5 text-muted-foreground">Template notice: replace this content with the current IEC-approved translated ICF before production use. This demo does not constitute participant consent or regulatory approval.</p>
+    </section>
+    <section className="rounded-lg border border-border bg-surface p-6"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Consent receipts</p><h2 className="mt-1 font-display text-lg font-semibold">Recorded this session</h2>{consentRecords.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">No participant consent decisions recorded yet.</p> : <div className="mt-4 divide-y divide-border">{consentRecords.map((record) => <div key={record.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><div><strong>{record.participantCode}</strong><p className="text-xs text-muted-foreground">{record.languageName} · {record.documentVersion} · Staff {record.staffInitials}</p></div><StatusPill tone={record.decision === "consented" ? "good" : "warn"}>{record.decision === "consented" ? "Consented" : "Declined"}</StatusPill></div>)}</div>}</section>
+  </div>;
 }

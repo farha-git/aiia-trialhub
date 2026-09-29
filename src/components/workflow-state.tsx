@@ -107,6 +107,19 @@ export type AuditEntry = {
   prevHash?: string | undefined;
 };
 
+export type ConsentRecord = {
+  id: string;
+  studyId: string;
+  participantCode: string;
+  language: string;
+  languageName: string;
+  documentVersion: string;
+  decision: "consented" | "declined";
+  participantMark: string;
+  staffInitials: string;
+  timestamp: string;
+};
+
 export type DocumentRecord = {
   id: string;
   studyId: string;
@@ -181,12 +194,14 @@ type WorkflowState = {
   safetyCases: WorkflowSafetyCase[];
   risks: ComplianceRisk[];
   auditEntries: AuditEntry[];
+  consentRecords: ConsentRecord[];
   documents: DocumentRecord[];
   batches: InterventionBatch[];
   createStudy: (input: NewStudy) => Promise<string>;
   advanceStudy: (studyId: string) => { ok: boolean; message: string };
   recordEnrollments: (studyId: string, count: number) => { ok: boolean; message: string };
   recordVisits: (studyId: string, count: number) => { ok: boolean; message: string };
+  recordConsent: (input: Omit<ConsentRecord, "id" | "timestamp">) => ConsentRecord;
   addSafetyCase: (input: Omit<WorkflowSafetyCase, "id" | "stage" | "owner" | "due">) => string;
   advanceSafetyCase: (caseId: string) => void;
   resolveRisk: (riskId: string) => void;
@@ -218,6 +233,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [safetyCases, setSafetyCases] = useState(initialSafetyCases);
   const [risks, setRisks] = useState(initialRisks);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [consentRecords, setConsentRecords] = useState<ConsentRecord[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>(initialDocuments);
   const [batches, setBatches] = useState<InterventionBatch[]>(initialBatches);
   useEffect(() => {
@@ -435,6 +451,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return { ok: true, message: `${accepted} follow-up visit${accepted === 1 ? "" : "s"} recorded.` };
   };
 
+  const recordConsent = (input: Omit<ConsentRecord, "id" | "timestamp">) => {
+    const record: ConsentRecord = {
+      ...input,
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+    };
+    setConsentRecords((records) => [record, ...records]);
+    recordAudit(input.studyId, `${input.decision === "consented" ? "Consent recorded" : "Consent declined"} for ${input.participantCode} in ${input.languageName}`);
+    return record;
+  };
+
   const addSafetyCase = (input: Omit<WorkflowSafetyCase, "id" | "stage" | "owner" | "due">) => {
     const number = safetyCases.length + 1;
     const id = `${input.severity}-${new Date().getFullYear()}-${String(number).padStart(3, "0")}`;
@@ -505,12 +532,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     safetyCases,
     risks,
     auditEntries,
+    consentRecords,
     documents,
     batches,
     createStudy,
     advanceStudy,
     recordEnrollments,
     recordVisits,
+    recordConsent,
     addSafetyCase,
     advanceSafetyCase,
     resolveRisk,
