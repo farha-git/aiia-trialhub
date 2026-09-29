@@ -34,6 +34,7 @@ type AuthContextValue = {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  role: AppRole | null;
   profileError: Error | null;
   loading: boolean;
   signIn: (email: string, password: string, requestedRole?: AppRole) => Promise<AppRole>;
@@ -165,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: session?.user ?? null,
         session,
         profile,
+        role: profile?.role ?? null,
         profileError,
         loading,
         signIn,

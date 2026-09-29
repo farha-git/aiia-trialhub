@@ -504,20 +504,20 @@ const initialBatches: InterventionBatch[] = [
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [studies, setStudies] = useState<WorkflowStudy[]>(initialStudies);
+  const [studies, setStudies] = useState<WorkflowStudy[]>([]);
   const [usingOfflineData, setUsingOfflineData] = useState(false);
   const [demoClockOffsetHours, setDemoClockOffsetHours] = useState(0);
-  const [safetyCases, setSafetyCases] = useState(initialSafetyCases);
-  const [risks, setRisks] = useState(initialRisks);
-  const [milestones, setMilestones] = useState<Milestone[]>(() => buildMilestones(initialStudies));
+  const [safetyCases, setSafetyCases] = useState<WorkflowSafetyCase[]>([]);
+  const [risks, setRisks] = useState<ComplianceRisk[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const auditChainRef = useRef<AuditEntry[]>([]);
   const auditQueueRef = useRef<Promise<void>>(Promise.resolve());
   const auditFailedRef = useRef(false);
   const complianceItemIdsRef = useRef(new Set<string>());
   const [consentRecords, setConsentRecords] = useState<ConsentRecord[]>([]);
-  const [documents, setDocuments] = useState<DocumentRecord[]>(initialDocuments);
-  const [batches, setBatches] = useState<InterventionBatch[]>(initialBatches);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [batches, setBatches] = useState<InterventionBatch[]>([]);
   useEffect(() => {
     let active = true;
 
@@ -650,41 +650,28 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime(),
         );
         if (!active) return;
-        setSafetyCases([
-          ...new Map(
-            [...initialSafetyCases, ...mappedCases].map((item) => [item.id, item]),
-          ).values(),
-        ]);
+        setSafetyCases(mappedCases);
         complianceItemIdsRef.current = new Set(mappedComplianceItems.map((item) => item.id));
-        setRisks([
-          ...new Map(
-            [...initialRisks, ...mappedRisks, ...mappedComplianceItems].map((item) => [
-              item.id,
-              item,
-            ]),
-          ).values(),
-        ]);
-        setDocuments([
-          ...new Map(
-            [...initialDocuments, ...mappedDocuments].map((item) => [item.id, item]),
-          ).values(),
-        ]);
-        setBatches([
-          ...new Map([...initialBatches, ...mappedBatches].map((item) => [item.id, item])).values(),
-        ]);
+        setRisks([...mappedRisks, ...mappedComplianceItems]);
+        setDocuments(mappedDocuments);
+        setBatches(mappedBatches);
         auditChainRef.current = mappedAudit;
         auditFailedRef.current = false;
         setAuditEntries([...mappedAudit].reverse());
-        if (mappedStudies.length > 0) {
-          setStudies(mappedStudies);
-          setMilestones(buildMilestones(mappedStudies));
-          setUsingOfflineData(false);
-        } else {
-          setUsingOfflineData(true);
-        }
+        setStudies(mappedStudies);
+        setMilestones(buildMilestones(mappedStudies));
+        setUsingOfflineData(false);
       } catch (error) {
         console.error("Failed to load studies:", error);
-        if (active) setUsingOfflineData(true);
+        if (active) {
+          setStudies(initialStudies);
+          setSafetyCases(initialSafetyCases);
+          setRisks(initialRisks);
+          setMilestones(buildMilestones(initialStudies));
+          setDocuments(initialDocuments);
+          setBatches(initialBatches);
+          setUsingOfflineData(true);
+        }
       }
     }
     void loadWorkflow();
