@@ -25,6 +25,7 @@ export const permissionsByRole: Record<AppRole, readonly Permission[]> = {
   SAFETY_OFFICER: ["studies:view", "safety:view", "safety:create", "safety:update", "compliance:view", "analytics:view", "documents:view", "audit:view"],
   COMPLIANCE_OFFICER: ["studies:view", "safety:view", "compliance:view", "compliance:update", "analytics:view", "documents:view", "documents:manage", "audit:view"],
   DATA_MANAGER: ["studies:view", "safety:view", "compliance:view", "analytics:view", "analytics:export", "documents:view", "audit:view"],
+  REGULATOR: ["studies:view", "safety:view", "compliance:view", "analytics:view", "documents:view", "audit:view"],
 };
 
 export function can(role: AppRole | null | undefined, permission: Permission) {
@@ -38,4 +39,5 @@ export const landingPathByRole = {
   SAFETY_OFFICER: "/safety",
   COMPLIANCE_OFFICER: "/compliance",
   DATA_MANAGER: "/analytics",
+  REGULATOR: "/platform",
 } as const;

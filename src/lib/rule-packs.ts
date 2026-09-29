@@ -14,7 +14,7 @@ export type RulePack = {
 export const rulePacks: Record<RulePackId, RulePack> = {
   "regulatory-ndct": {
     label: "Regulatory NDCT",
-    description: "Placeholder regulatory rule pack.",
+    description: "Regulatory rule pack pending source verification.",
     saeInitialReportHours: 24,
     saeFullReportDays: 14,
     ethicsExpiryWarningDays: 60,
@@ -27,7 +27,7 @@ export const rulePacks: Record<RulePackId, RulePack> = {
     saeInitialReportHours: 24,
     saeFullReportDays: 14,
     ethicsExpiryWarningDays: 60,
-    source: "Placeholder: set from GCP-ASU (Ministry of Ayush) SAE section",
+    source: "Source pending: GCP-ASU (Ministry of Ayush) SAE section",
     verified: false,
   },
   "institutional-sop": {

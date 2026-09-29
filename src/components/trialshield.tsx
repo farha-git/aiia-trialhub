@@ -40,6 +40,7 @@ const roleNavAccess = {
   SAFETY_OFFICER: new Set(["Portfolio", "Safety"]),
   COMPLIANCE_OFFICER: new Set(["Portfolio", "Compliance", "Documents"]),
   DATA_MANAGER: new Set(["Portfolio", "Analytics", "Exports"]),
+  REGULATOR: new Set(navItems.filter(([label]) => label !== "Admin").map(([label]) => label)),
 } as const;
 
 export function Brand({ compact = false }: { compact?: boolean }) {
@@ -138,15 +139,15 @@ export function ProgressBar({ value, tone = "primary" }: { value: number; tone?:
   return <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full transition-all duration-700", tone === "primary" && "bg-secondary", tone === "risk" && "bg-risk", tone === "accent" && "bg-accent")} style={{ width: `${value}%` }} /></div>;
 }
 
-export function AttentionItem({ severity, title, meta, owner, action, onAction }: { severity: "critical" | "warning" | "stable"; title: string; meta: string; owner: string; action: string; onAction: () => void }) {
+export function AttentionItem({ severity, title, meta, owner, action, onAction, href, actionDisabled = false }: { severity: "critical" | "warning" | "stable"; title: string; meta: ReactNode; owner: string; action: string; onAction: () => void; href?: string; actionDisabled?: boolean }) {
   return (
     <article className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4 border-b border-border px-1 py-5 last:border-0">
       <span className={cn("mt-1 size-2.5 rounded-full ring-4", severity === "critical" && "bg-risk ring-risk/10", severity === "warning" && "bg-warning ring-warning/10", severity === "stable" && "bg-positive ring-positive/10")} />
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-sm font-semibold text-foreground">{title}</h3><span className="text-xs text-muted-foreground">{meta}</span></div>
+        <div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-sm font-semibold text-foreground">{href ? <Link to={href}>{title}</Link> : title}</h3><span className="text-xs text-muted-foreground">{meta}</span></div>
         <p className="mt-2 text-xs text-muted-foreground">Owner <span className="font-medium text-foreground">{owner}</span></p>
       </div>
-      <Button variant="ghost" size="sm" className="group-hover:bg-muted" onClick={onAction}>{action}<ChevronRight className="size-3.5" /></Button>
+      <Button variant="ghost" size="sm" disabled={actionDisabled} title={actionDisabled ? "Your profile role is read-only for this action" : undefined} className="group-hover:bg-muted" onClick={onAction}>{action}<ChevronRight className="size-3.5" /></Button>
     </article>
   );
 }

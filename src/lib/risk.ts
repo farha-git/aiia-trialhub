@@ -1,5 +1,5 @@
 import type { ComplianceRisk, Milestone, WorkflowSafetyCase, WorkflowStudy } from "@/components/workflow-state";
-import { computeDueAt, remainingMs } from "@/lib/deadlines";
+import { calculateDeadline } from "@/lib/deadlines";
 import { rulePacks } from "@/lib/rule-packs";
 
 export type RiskFactor = { label: string; points: number; detail: string };
@@ -15,7 +15,10 @@ export function computeRisk(study: WorkflowStudy, cases: WorkflowSafetyCase[], m
   if (study.startedOn && study.plannedEnd && actual + 0.15 < expected) factors.push({ label: "Enrollment lag", points: 20, detail: `${Math.round(actual * 100)}% enrolled against ${Math.round(expected * 100)}% expected pace` });
   const pack = rulePacks[study.rulePack];
   const openCases = cases.filter((item) => item.studyId === study.id && item.severity === "SAE" && item.stage !== "closed");
-  const overdueCases = openCases.filter((item) => item.awareAt && remainingMs(computeDueAt(item.awareAt, pack.saeInitialReportHours), now) < 0);
+  const overdueCases = openCases.filter((item) => {
+    const deadline = calculateDeadline(item.awareAt, pack.saeInitialReportHours, now);
+    return deadline !== null && deadline.remainingMs < 0;
+  });
   if (overdueCases.length) factors.push({ label: "Overdue SAE report", points: 30, detail: `${overdueCases.length} open SAE deadline${overdueCases.length === 1 ? "" : "s"} overdue` });
   const ethicsRemaining = study.ethicsExpiresOn ? new Date(study.ethicsExpiresOn).getTime() - now.getTime() : 0;
   if (study.ethicsExpiresOn && ethicsRemaining < pack.ethicsExpiryWarningDays * 86400000) factors.push({ label: "Ethics expiry", points: ethicsRemaining < 0 ? 30 : 15, detail: ethicsRemaining < 0 ? "Approval expiry date has passed" : "Approval is within the configured warning window" });

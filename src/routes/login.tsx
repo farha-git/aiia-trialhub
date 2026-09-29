@@ -13,7 +13,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { user, role, signIn, signUp } = useAuth();
+  const { user, profile, signIn, signUp } = useAuth();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -24,8 +24,8 @@ function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (user && role && !submitting) void navigate({ to: landingPathByRole[role] });
-  }, [navigate, role, submitting, user]);
+    if (user && profile?.role && !submitting) void navigate({ to: landingPathByRole[profile.role] });
+  }, [navigate, profile?.role, submitting, user]);
 
   if (user) return null;
 
@@ -40,8 +40,8 @@ function LoginPage() {
     setSubmitting(true);
     try {
       if (mode === "sign-in") {
-        await signIn(email, password, selectedRole);
-        await navigate({ to: landingPathByRole[selectedRole] });
+        const assignedRole = await signIn(email, password, selectedRole);
+        await navigate({ to: landingPathByRole[assignedRole] });
       } else {
         await signUp(email, password, fullName);
         setMessage("Account created. Check your email if confirmation is enabled.");

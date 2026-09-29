@@ -10,7 +10,7 @@ export function AuthGuard({
   children: React.ReactNode;
   roles?: AppRole[];
 }) {
-  const { user, profile, profileError, role, loading, refreshProfile } = useAuth();
+  const { user, profile, profileError, loading, refreshProfile } = useAuth();
   const [retrying, setRetrying] = useState(false);
   const location = useLocation();
 
@@ -31,7 +31,7 @@ export function AuthGuard({
     );
   }
 
-  if (!profile || !role || (roles && !roles.includes(role))) {
+  if (!profile || (roles && !roles.includes(profile.role))) {
     return (
       <div className="grid min-h-screen place-items-center bg-background px-5 text-center">
         <div>

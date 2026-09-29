@@ -16,6 +16,7 @@ export const appRoles = [
   "SAFETY_OFFICER",
   "COMPLIANCE_OFFICER",
   "DATA_MANAGER",
+  "REGULATOR",
 ] as const;
 
 export type AppRole = (typeof appRoles)[number];
@@ -34,9 +35,8 @@ type AuthContextValue = {
   session: Session | null;
   profile: Profile | null;
   profileError: Error | null;
-  role: AppRole | null;
   loading: boolean;
-  signIn: (email: string, password: string, requestedRole?: AppRole) => Promise<void>;
+  signIn: (email: string, password: string, requestedRole?: AppRole) => Promise<AppRole>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -49,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileError, setProfileError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
-
   const refreshProfile = async () => {
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError) throw userError;
@@ -118,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string, requestedRole?: AppRole) => {
+  const signIn = async (email: string, password: string, requestedRole?: AppRole): Promise<AppRole> => {
     const { data: sessionData, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     if (requestedRole) {
@@ -135,7 +134,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         throw new Error(`This account is assigned to ${String(assignedProfile.role).replaceAll("_", " ")}. Select that role to continue.`);
       }
+      return assignedProfile.role;
     }
+    const { data: assignedProfile, error: profileQueryError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", sessionData.user.id)
+      .single();
+    if (profileQueryError) throw profileQueryError;
+    return assignedProfile.role;
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
@@ -159,7 +166,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         profile,
         profileError,
-        role: profile?.role ?? null,
         loading,
         signIn,
         signUp,

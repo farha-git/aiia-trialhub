@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { clinicalReportRows } from "@/lib/clinical-report";
 
 type ChatMessage = {
   role: "user" | "model";
@@ -12,14 +11,6 @@ type ChatRequest = {
   history: ChatMessage[];
   snapshot?: unknown;
 };
-
-const projectContext = [
-  "AIIA TrialShield is a CTMS platform for Ayurveda research (SIH Problem Statement ID26046). Use the current application records below as the source of truth.",
-  `Portfolio sample study records: ${JSON.stringify(clinicalReportRows)}.`,
-  "Current study, safety, milestone, document, and compliance values are supplied in the live snapshot with each request.",
-  "The platform includes portfolio, studies, safety, compliance, analytics, documents and exports workspaces. Exports currently include summary PDF/Excel/CSV/JSON/XML and a FHIR R4 Bundle. The export files are not validated SDTM, ADaM, Define-XML or ABDM submissions.",
-  "Do not claim that an external EDC, HIS, or CTRI submission has occurred. Drafts and workflow actions require human review.",
-].join("\n");
 
 export const askClinicalAssistant = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
@@ -59,10 +50,11 @@ export const askClinicalAssistant = createServerFn({ method: "POST" })
       .replace(/\b[A-Z]{5}\d{4}[A-Z]\b/g, "[redacted-pan]");
     const safeQuestion = redact(data.question);
     const safeHistory = data.history.map((message) => ({ ...message, text: redact(message.text) }));
+    const safeSnapshot = redact(data.snapshotJson);
     const requestBody = JSON.stringify({
         systemInstruction: {
           parts: [{
-            text: `You are the AIIA TrialShield project-data assistant. Answer directly using only the project context and live snapshot below. If information is missing, say it is not available. Never present the platform as regulatory advice or claim submissions were made. Drafts require human sign-off. Do not repeat identifiers or protected health information.\n\nPROJECT CONTEXT\n${projectContext}\n\nLIVE SNAPSHOT\n${data.snapshotJson}`,
+            text: `You are the AIIA TrialShield project-data assistant. Answer directly using only the live snapshot below. If information is missing, say it is not available. Never present the platform as regulatory advice or claim submissions were made. Drafts require human sign-off. Do not repeat identifiers or protected health information.\n\nLIVE SNAPSHOT\n${safeSnapshot}`,
           }],
         },
         contents: [

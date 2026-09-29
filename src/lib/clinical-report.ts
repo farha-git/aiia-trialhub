@@ -12,18 +12,10 @@ export type ClinicalReportRow = {
   dataCompleteness: number;
 };
 
-export const clinicalReportRows: ClinicalReportRow[] = [
-  { studyId: "AIIA-OA-024", title: "Knee osteoarthritis", phase: "Phase III", status: "Recruiting", enrolled: 136, target: 200, sites: 4, ethics: "Approved", ctri: "Reconciliation due", openSaes: 2, dataCompleteness: 88 },
-  { studyId: "AIIA-RA-019", title: "Rheumatoid arthritis", phase: "Phase II", status: "Active", enrolled: 162, target: 200, sites: 2, ethics: "Approved", ctri: "Current", openSaes: 1, dataCompleteness: 91 },
-  { studyId: "AIIA-DM-031", title: "Nishamalaki outcomes", phase: "Observational", status: "Recruiting", enrolled: 92, target: 200, sites: 3, ethics: "Renewal due", ctri: "Current", openSaes: 1, dataCompleteness: 84 },
-  { studyId: "AIIA-PS-017", title: "Prakriti stratification", phase: "Registry", status: "Follow-up", enrolled: 92, target: 100, sites: 1, ethics: "Approved", ctri: "Current", openSaes: 0, dataCompleteness: 95 },
-];
-
 export function buildClinicalReportRows(
-  studies: Array<{ id: string; title: string; phase: string; status: string; enrolled: number; target: number; activatedSites: number; stage: string; archived: boolean }>,
+  studies: Array<{ id: string; title: string; phase: string; status: string; enrolled: number; target: number; activatedSites: number; dataCompleteness: number; stage: string; archived: boolean }>,
   safetyCases: Array<{ studyId: string; severity: string; stage: string }>,
 ): ClinicalReportRow[] {
-  const qualityByStudy = new Map(clinicalReportRows.map((row) => [row.studyId, row.dataCompleteness]));
   const stageRank: Record<string, number> = { protocol: 0, ethics: 1, ctri: 2, sites: 3, recruitment: 4, "follow-up": 5, "close-out": 6, closed: 7 };
   return studies.filter((study) => !study.archived).map((study) => ({
     studyId: study.id,
@@ -36,7 +28,7 @@ export function buildClinicalReportRows(
     ethics: (stageRank[study.stage] ?? 0) > 1 ? "Approved" : study.stage === "ethics" ? "Under review" : "Pending",
     ctri: (stageRank[study.stage] ?? 0) > 2 ? "Current" : study.stage === "ctri" ? "Registration pending" : "Pending",
     openSaes: safetyCases.filter((item) => item.studyId === study.id && item.severity === "SAE" && item.stage !== "closed").length,
-    dataCompleteness: qualityByStudy.get(study.id) ?? (study.enrolled ? 90 : 0),
+    dataCompleteness: study.dataCompleteness,
   }));
 }
 
@@ -85,13 +77,12 @@ function makePrintableReport(reportRows: ClinicalReportRow[]) {
   const completeness = reportRows.length ? Math.round(reportRows.reduce((total, row) => total + row.dataCompleteness, 0) / reportRows.length) : 0;
   return `<!doctype html><html><head><meta charset="utf-8"><title>AIIA CTMS Portfolio Report</title><style>
     body{font:14px Arial,sans-serif;color:#1d302b;margin:36px}header{border-bottom:3px solid #397a62;padding-bottom:16px}h1{font-size:26px;margin:0 0 8px}p{color:#60716b}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.metric{background:#f0f5f1;padding:14px;border-left:3px solid #397a62}.metric b{display:block;font-size:23px}.chart{margin:24px 0}.bar-row{display:grid;grid-template-columns:130px 1fr 45px;gap:10px;align-items:center;margin:10px 0}.track{height:10px;background:#e8eeea}.track i{display:block;height:100%;background:#397a62}table{border-collapse:collapse;width:100%;font-size:11px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #dce4df}th{background:#f0f5f1}.foot{margin-top:24px;font-size:11px;color:#64736d}@media print{body{margin:16mm}.metric,.track i{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-  </style></head><body><header><h1>AIIA Clinical Trials Portfolio Report</h1><p>Problem Statement ID26046 · Synthetic demonstration data · Generated ${new Date().toLocaleString()}</p></header><section class="metrics"><div class="metric"><b>${reportRows.length}</b>Active studies</div><div class="metric"><b>${recruitment}%</b>Portfolio recruitment · ${totalEnrolled} of ${totalTarget}</div><div class="metric"><b>${openSaes}</b>Open SAEs</div><div class="metric"><b>${completeness}%</b>Mean data completeness</div></section><h2>Recruitment against target</h2><section class="chart">${bars}</section><h2>Study readiness and safety</h2><table><thead><tr><th>Study</th><th>Study name</th><th>Phase</th><th>Status</th><th>Enrolled</th><th>Ethics</th><th>CTRI</th><th>Open SAEs</th><th>Completeness</th></tr></thead><tbody>${tableRows}</tbody></table><p class="foot">Illustrative operational report only. Not a regulatory submission, validated SDTM/ADaM package, or source of clinical decisions.</p><script>window.onload=()=>window.print()</script></body></html>`;
+  </style></head><body><header><h1>AIIA Clinical Trials Portfolio Report</h1><p>Problem Statement ID26046 · Illustrative synthetic data · Generated ${new Date().toLocaleString()}</p></header><section class="metrics"><div class="metric"><b>${reportRows.length}</b>Active studies</div><div class="metric"><b>${recruitment}%</b>Portfolio recruitment · ${totalEnrolled} of ${totalTarget}</div><div class="metric"><b>${openSaes}</b>Open SAEs</div><div class="metric"><b>${completeness}%</b>Mean data completeness</div></section><h2>Recruitment against target</h2><section class="chart">${bars}</section><h2>Study readiness and safety</h2><table><thead><tr><th>Study</th><th>Study name</th><th>Phase</th><th>Status</th><th>Enrolled</th><th>Ethics</th><th>CTRI</th><th>Open SAEs</th><th>Completeness</th></tr></thead><tbody>${tableRows}</tbody></table><p class="foot">Illustrative operational report only. Not a regulatory submission, validated SDTM/ADaM package, or source of clinical decisions.</p><script>window.onload=()=>window.print()</script></body></html>`;
 }
 
-export function downloadClinicalReport(format: ClinicalReportFormat, reportRows: ClinicalReportRow[] = clinicalReportRows) {
+export function downloadClinicalReport(format: ClinicalReportFormat, reportRows: ClinicalReportRow[] = []) {
   const date = new Date().toISOString().slice(0, 10);
-  const sourceRows = reportRows.length > 0 ? reportRows : clinicalReportRows;
-  const firstRow = sourceRows[0];
+  const firstRow = reportRows[0];
   if (!firstRow) return false;
   if (format === "pdf") {
     const reportWindow = window.open("", "_blank");
@@ -135,7 +126,7 @@ export function downloadClinicalReport(format: ClinicalReportFormat, reportRows:
         },
       })),
     };
-    saveBlob(JSON.stringify(bundle, null, 2), `aiia-ctms-fhir-r4-${date}.json`, "application/fhir+json");
+    saveBlob(JSON.stringify(bundle, null, 2), `aiia-ctms-fhir-r4-not-conformance-validated-${date}.json`, "application/fhir+json");
   }
   return true;
 }

@@ -25,7 +25,7 @@ function createMessage(role: ChatMessage["role"], text: string): ChatMessage {
 
 export function ClinicalChatbot() {
   const askAssistant = useServerFn(askClinicalAssistant);
-  const { studies, safetyCases } = useWorkflow();
+  const { studies, safetyCases, risks, milestones, documents, batches, demoClockOffsetHours } = useWorkflow();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,9 +52,13 @@ export function ClinicalChatbot() {
 
     try {
       const snapshot = {
-        capturedAt: new Date().toISOString(),
-        studies: studies.map((study) => ({ id: study.id, title: study.title, stage: study.stage, rulePack: study.rulePack, enrolled: study.enrolled, target: study.target })),
-        safetyCases: safetyCases.map((item) => ({ id: item.id, studyId: item.studyId, severity: item.severity, stage: item.stage, due: item.due })),
+        capturedAt: new Date(Date.now() + demoClockOffsetHours * 60 * 60 * 1000).toISOString(),
+        studies: studies.filter((study) => !study.archived).map((study) => ({ id: study.id, title: study.title, phase: study.phase, status: study.status, stage: study.stage, rulePack: study.rulePack, enrolled: study.enrolled, target: study.target, dataCompleteness: study.dataCompleteness, ethicsExpiresOn: study.ethicsExpiresOn, plannedEnd: study.plannedEnd })),
+        safetyCases: safetyCases.map((item) => ({ id: item.id, studyId: item.studyId, severity: item.severity, stage: item.stage, awareAt: item.awareAt, batchId: item.batchId })),
+        complianceRisks: risks,
+        milestones,
+        documents,
+        batches,
       };
       const result = await askAssistant({ data: { question, history, snapshot } });
       setMessages((current) => [...current, createMessage("assistant", result.answer)]);

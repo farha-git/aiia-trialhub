@@ -73,7 +73,7 @@ Monitor clinical trials, ethics readiness, participant safety, pharmacovigilance
 
 Buttons:
 Explore Platform
-View Demo
+Open Platform
 
 Background:
 Elegant botanical illustrations blended with modern research aesthetics.

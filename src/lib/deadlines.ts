@@ -22,3 +22,15 @@ export function formatRemaining(milliseconds: number) {
   const value = days > 0 ? `${days}d ${hours}h` : `${hours}h ${minutes}m`;
   return milliseconds < 0 ? `Overdue by ${value}` : `${value} left`;
 }
+
+export function calculateDeadline(occurredAt: string | undefined, windowHours: number, now = new Date(), amberWindowHours = 12) {
+  if (!occurredAt) return null;
+  const dueAt = computeDueAt(occurredAt, windowHours);
+  const remaining = remainingMs(dueAt, now);
+  return {
+    dueAt,
+    remainingMs: remaining,
+    label: formatRemaining(remaining),
+    status: statusFor(remaining, amberWindowHours * 60 * 60 * 1000),
+  };
+}
