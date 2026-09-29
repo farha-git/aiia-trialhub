@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AttentionItem, PlatformPage, ProgressBar, StatusPill, Timeline, WorkflowModal } from "@/components/trialshield";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { buildClinicalReportRows, downloadClinicalReport, downloadTsCsv, type ClinicalReportFormat } from "@/lib/clinical-report";
 import { useWorkflow, getStudyProgress } from "@/components/workflow-state";
 import { useNow } from "@/hooks/use-now";
@@ -15,7 +16,13 @@ import { rulePacks } from "@/lib/rule-packs";
 import { computeRisk } from "@/lib/risk";
 import { appRoles, useAuth, type AppRole } from "@/lib/auth-context";
 import { can } from "@/lib/permissions";
+import { detectSafetySignals } from "@/lib/safety-signals";
 import { supabase } from "@/lib/supabase";
+
+function toLocalDateTimeInput(date: Date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
 
 export function StudiesWorkspace() {
   const navigate = useNavigate();
@@ -95,10 +102,17 @@ export function SafetyWorkspace() {
   const [studyId, setStudyId] = useState(studies[0]?.id ?? "");
   const [severity, setSeverity] = useState<"AE" | "SAE">("SAE");
   const [batchId, setBatchId] = useState("");
+  const [onsetAt, setOnsetAt] = useState(() => toLocalDateTimeInput(new Date()));
+  const [awareAt, setAwareAt] = useState(() => toLocalDateTimeInput(new Date()));
+  const [meddraTerm, setMeddraTerm] = useState("");
+  const [namasteCode, setNamasteCode] = useState("");
+  const [prakriti, setPrakriti] = useState("");
+  const [causality, setCausality] = useState("");
+  const [concomitantMeds, setConcomitantMeds] = useState("");
+  const [interactionSuspected, setInteractionSuspected] = useState(false);
   const openCases = safetyCases.filter((item) => item.stage !== "closed");
   const openSaes = openCases.filter((item) => item.severity === "SAE").length;
-  const batchCounts = new Map(safetyCases.filter((item) => item.batchId).map((item) => [item.batchId, safetyCases.filter((candidate) => candidate.batchId === item.batchId).length]));
-  const signalForReview = safetyCases.some((item) => item.batchId && (batchCounts.get(item.batchId) ?? 0) >= 2) || safetyCases.some((item) => item.batchId && batches.find((batch) => batch.id === item.batchId)?.coaStatus === "Failed");
+  const safetySignals = detectSafetySignals(safetyCases, batches);
   const dueCase = openCases[0];
   const stageLabel: Record<(typeof safetyCases)[number]["stage"], string> = { reported: "Reported", "medical-review": "Medical review", "regulatory-reporting": "Regulatory reporting", "follow-up": "Follow-up", "ready-to-close": "Ready to close", "signal-review": "Signal review", closed: "Closed" };
   const nextAction: Record<(typeof safetyCases)[number]["stage"], string> = { reported: "Start review", "medical-review": "Submit report", "regulatory-reporting": "Request follow-up", "follow-up": "Confirm follow-up", "ready-to-close": "Close case", "signal-review": "Assess signal", closed: "Closed" };
@@ -111,9 +125,41 @@ export function SafetyWorkspace() {
   };
   const submitCase = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!description.trim() || !studyId) return;
-    const caseId = addSafetyCase({ studyId, title: description.trim(), severity, batchId: batchId || undefined });
+    if (!description.trim() || !studyId || !awareAt) return;
+    const awarenessTimestamp = new Date(awareAt).getTime();
+    const onsetTimestamp = onsetAt ? new Date(onsetAt).getTime() : undefined;
+    if (!Number.isFinite(awarenessTimestamp) || awarenessTimestamp > Date.now()) {
+      toast.error("Site awareness time must be in the past or present.");
+      return;
+    }
+    if (onsetTimestamp !== undefined && (!Number.isFinite(onsetTimestamp) || onsetTimestamp > awarenessTimestamp)) {
+      toast.error("Event onset cannot be later than site awareness.");
+      return;
+    }
+    const caseId = addSafetyCase({
+      studyId,
+      title: description.trim(),
+      severity,
+      batchId: batchId || undefined,
+      onsetAt: onsetAt ? new Date(onsetAt).toISOString() : undefined,
+      awareAt: new Date(awareAt).toISOString(),
+      meddraTerm: meddraTerm.trim() || undefined,
+      namasteCode: namasteCode.trim() || undefined,
+      prakriti: prakriti ? prakriti as NonNullable<(typeof safetyCases)[number]["prakriti"]> : undefined,
+      causality: causality ? causality as NonNullable<(typeof safetyCases)[number]["causality"]> : undefined,
+      concomitantMeds: concomitantMeds.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean),
+      interactionSuspected,
+    });
     setDescription("");
+    setMeddraTerm("");
+    setNamasteCode("");
+    setPrakriti("");
+    setCausality("");
+    setConcomitantMeds("");
+    setInteractionSuspected(false);
+    setBatchId("");
+    setOnsetAt(toLocalDateTimeInput(new Date()));
+    setAwareAt(toLocalDateTimeInput(new Date()));
     setCreateOpen(false);
     toast.success(`${caseId} added to the safety workflow.`);
   };
@@ -123,12 +169,17 @@ export function SafetyWorkspace() {
           <label className="block space-y-1.5 text-sm font-medium">Related study<select value={studyId} onChange={(event) => setStudyId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{studies.filter((study) => !study.archived).map((study) => <option key={study.id} value={study.id}>{study.id} · {study.title}</option>)}</select></label>
           <label className="block space-y-1.5 text-sm font-medium">Event description<Input required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the event" /></label>
           <label className="block space-y-1.5 text-sm font-medium">Report type<select value={severity} onChange={(event) => setSeverity(event.target.value as "AE" | "SAE")} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="AE">Adverse event (AE)</option><option value="SAE">Serious adverse event (SAE)</option></select></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block space-y-1.5 text-sm font-medium">Event onset<input type="datetime-local" max={toLocalDateTimeInput(new Date())} value={onsetAt} onChange={(event) => setOnsetAt(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" /></label><label className="block space-y-1.5 text-sm font-medium">Site became aware<input type="datetime-local" max={toLocalDateTimeInput(new Date())} required value={awareAt} onChange={(event) => setAwareAt(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" /><span className="block text-xs font-normal text-muted-foreground">Used to calculate the reporting deadline.</span></label></div>
           <label className="block space-y-1.5 text-sm font-medium">Intervention batch<select value={batchId} onChange={(event) => setBatchId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">No batch linked</option>{batches.filter((batch) => batch.studyId === studyId).map((batch) => <option key={batch.id} value={batch.id}>{batch.lotNo} · {batch.coaStatus}</option>)}</select><span className="mt-1 block text-xs font-normal text-muted-foreground">Manual batch linkage only; do not enter personal identifiers.</span></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block space-y-1.5 text-sm font-medium">MedDRA event term<Input value={meddraTerm} onChange={(event) => setMeddraTerm(event.target.value)} placeholder="Standardized event term" /></label><label className="block space-y-1.5 text-sm font-medium">NAMASTE code<Input value={namasteCode} onChange={(event) => setNamasteCode(event.target.value)} placeholder="Optional Ayurveda code" /></label></div>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block space-y-1.5 text-sm font-medium">Prakriti<select value={prakriti} onChange={(event) => setPrakriti(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">Not recorded</option>{["Vata", "Pitta", "Kapha", "Vata-Pitta", "Pitta-Kapha", "Vata-Kapha", "Sama"].map((value) => <option key={value}>{value}</option>)}</select></label><label className="block space-y-1.5 text-sm font-medium">Causality assessment<select value={causality} onChange={(event) => setCausality(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">Not assessed</option>{["Certain", "Probable", "Possible", "Unlikely", "Unrelated", "Unassessable"].map((value) => <option key={value}>{value}</option>)}</select></label></div>
+          <label className="block space-y-1.5 text-sm font-medium">Concomitant medicines<Textarea value={concomitantMeds} onChange={(event) => setConcomitantMeds(event.target.value)} placeholder="Medicine names, separated by commas or new lines" rows={2} /><span className="block text-xs font-normal text-muted-foreground">Do not include patient names, IDs, or other identifying health information.</span></label>
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={interactionSuspected} onChange={(event) => setInteractionSuspected(event.target.checked)} className="mt-1 size-4 accent-primary" /><span><strong className="font-medium">Possible herb-medicine interaction</strong><span className="mt-0.5 block text-xs text-muted-foreground">Creates a high-priority signal for qualified review.</span></span></label>
           <div className="flex justify-end"><Button type="submit"><Plus className="size-4" />Create safety report</Button></div>
         </form>
     </WorkflowModal>
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.7fr)]">
-      {signalForReview && <div className="xl:col-span-2 border border-risk/30 bg-risk/10 px-4 py-3 text-sm font-semibold text-risk">Signal for review: linked safety events share an intervention batch or a batch has a failed quality test.</div>}
+      {safetySignals.length > 0 && <section className="xl:col-span-2 rounded-lg border border-risk/30 bg-risk/5 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-risk">Ayurveda safety surveillance</p><h2 className="mt-1 font-display text-lg font-semibold">Signals requiring qualified review</h2></div><StatusPill tone="risk">{safetySignals.length} active {safetySignals.length === 1 ? "signal" : "signals"}</StatusPill></div><div className="mt-3 divide-y divide-risk/15">{safetySignals.map((signal) => <article key={signal.id} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">{signal.title}</h3><StatusPill tone={signal.level === "High" ? "risk" : "warn"}>{signal.level}</StatusPill></div><p className="mt-1 text-xs leading-5 text-muted-foreground">{signal.detail}</p><p className="mt-1 text-[11px] text-muted-foreground">Reports: {signal.caseIds.join(", ")} · Studies: {signal.studyIds.join(", ")}</p></div><span className="text-xs font-medium text-muted-foreground">Review only; not a clinical determination</span></article>)}</div></section>}
       <section className="rounded-lg border border-border bg-surface p-5 shadow-xs"><div className="mb-2 flex items-center justify-between"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-risk">Needs attention</p><h2 className="mt-1 font-display text-xl font-semibold">Safety reports in progress</h2></div><StatusPill tone="risk">{openSaes} open SAEs</StatusPill></div>
         {openCases.map((item) => <AttentionItem key={item.id} severity={item.severity === "SAE" ? "critical" : "warning"} title={`${item.id} · ${item.title}`} meta={`${item.studyId} · ${stageLabel[item.stage]} · ${deadlineFor(item)}`} owner={item.owner} action={nextAction[item.stage]} onAction={() => { if (!can(role, "safety:update")) return; advanceSafetyCase(item.id); toast.success(`${item.id} moved to the next review step.`); }} />)}
         {openCases.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No open safety reports.</p>}
@@ -207,7 +258,7 @@ export function UtilityWorkspace({ type }: { type: keyof typeof utilityContent }
   const data = utilityContent[type];
   const workflow = useWorkflow();
   const [format, setFormat] = useState<ClinicalReportFormat>("pdf");
-  const reportRows = buildClinicalReportRows(workflow.studies, workflow.safetyCases);
+  const reportRows = buildClinicalReportRows(workflow.studies, workflow.safetyCases, workflow.batches);
   const totalEnrolled = reportRows.reduce((total, row) => total + row.enrolled, 0);
   const totalTarget = reportRows.reduce((total, row) => total + row.target, 0);
   const recruitmentPercent = totalTarget ? Math.round(totalEnrolled / totalTarget * 100) : 0;
@@ -223,10 +274,10 @@ export function UtilityWorkspace({ type }: { type: keyof typeof utilityContent }
   return <PlatformPage eyebrow={data.eyebrow} title={data.title} description={data.description} actions={type === "exports" || type === "analytics" ? <Button onClick={downloadReport}><Download className="size-4" />Download report</Button> : <Button variant="secondary" onClick={() => toast.info("Document options are available.")}><MoreHorizontal className="size-4" />Options</Button>}>
     {type === "exports" || type === "analytics" ? <div className="space-y-6">
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/8 text-primary">{data.icon}</div><div><h2 className="font-display text-lg font-semibold">{data.heading}</h2><p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{data.detail}</p></div></div><div className="flex flex-wrap items-center gap-2"><label htmlFor="report-format" className="sr-only">Report format</label><select id="report-format" value={format} onChange={(event) => setFormat(event.target.value as ClinicalReportFormat)} className="h-10 min-w-40 rounded-md border border-input bg-background px-3 text-sm"><option value="pdf">PDF (print dialog)</option><option value="excel">Excel workbook (.xls)</option><option value="csv">CSV</option><option value="json">JSON</option><option value="xml">XML</option><option value="fhir">FHIR R4 Bundle JSON</option><option value="cdisc-ts">CDISC TS domain (draft, not validated)</option></select><Button onClick={downloadReport}><Download className="size-4" />Download</Button></div></div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Active studies", String(reportRows.length), "Current non-archived studies"], ["Recruitment", `${recruitmentPercent}%`, `${totalEnrolled} of ${totalTarget} participants enrolled`], ["Open serious events", String(openSaes), "Across the current study portfolio"], ["Data completeness", `${meanCompleteness}%`, "Mean across current report rows"]].map(([label, value, note]) => <article key={label} className="border-l-2 border-secondary bg-surface px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-1 font-display text-2xl font-semibold">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{note}</p></article>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Active studies", String(reportRows.length), "Current non-archived studies"], ["Recruitment", `${recruitmentPercent}%`, `${totalEnrolled} of ${totalTarget} participants enrolled`], ["Open serious events", String(openSaes), "Across the current study portfolio"], ["Open safety signals", String(reportRows.reduce((total, row) => total + row.openSafetySignals, 0)), "Event clusters, interactions, or batch concerns"], ["Data completeness", `${meanCompleteness}%`, "Mean across current report rows"]].map(([label, value, note]) => <article key={label} className="border-l-2 border-secondary bg-surface px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-1 font-display text-2xl font-semibold">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{note}</p></article>)}</div>
       <div className="grid gap-5 xl:grid-cols-2"><section className="rounded-lg border border-border bg-surface p-5"><div className="mb-4"><h2 className="font-display text-base font-semibold">Recruitment against target</h2><p className="mt-1 text-xs text-muted-foreground">Enrolled participants and remaining target by study</p></div><div className="h-72 w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={recruitmentData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="study" tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip /><Legend /><Bar dataKey="Enrolled" stackId="a" fill="hsl(var(--secondary))" radius={[3, 3, 0, 0]} /><Bar dataKey="Remaining" stackId="a" fill="hsl(var(--muted))" /></BarChart></ResponsiveContainer></div></section>
         <section className="rounded-lg border border-border bg-surface p-5"><div className="mb-4"><h2 className="font-display text-base font-semibold">Data quality and safety</h2><p className="mt-1 text-xs text-muted-foreground">Completeness percentage with open SAE count scaled for comparison</p></div><div className="h-72 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={qualityData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="study" tickLine={false} axisLine={false} /><YAxis domain={[0, 100]} tickLine={false} axisLine={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="Completeness" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} /><Line type="monotone" dataKey="Open SAEs" stroke="hsl(var(--destructive))" strokeWidth={2} strokeDasharray="5 4" /></LineChart></ResponsiveContainer></div></section></div>
-      <section className="overflow-hidden rounded-lg border border-border bg-surface"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><h2 className="font-display text-base font-semibold">Study-level report</h2><p className="mt-1 text-xs text-muted-foreground">No participant identifiers are included.</p></div><StatusPill tone="neutral">{reportRows.length} current studies</StatusPill></div><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-xs"><thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground"><tr>{["Study", "Phase / status", "Recruitment", "Ethics", "CTRI", "Open SAEs", "Data completeness"].map((heading) => <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>)}</tr></thead><tbody>{reportRows.map((row) => <tr key={row.studyId} className="border-t border-border"><td className="px-4 py-3 font-semibold text-secondary">{row.studyId}<p className="mt-1 font-normal text-muted-foreground">{row.title}</p></td><td className="px-4 py-3">{row.phase}<p className="mt-1 text-muted-foreground">{row.status}</p></td><td className="px-4 py-3">{row.enrolled} / {row.target}<div className="mt-2 w-28"><ProgressBar value={Math.min(100, Math.round(row.enrolled / Math.max(row.target, 1) * 100))} /></div></td><td className="px-4 py-3">{row.ethics}</td><td className="px-4 py-3">{row.ctri}</td><td className="px-4 py-3">{row.openSaes}</td><td className="px-4 py-3">{row.dataCompleteness}%</td></tr>)}</tbody></table></div></section>
+      <section className="overflow-hidden rounded-lg border border-border bg-surface"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><h2 className="font-display text-base font-semibold">Study-level report</h2><p className="mt-1 text-xs text-muted-foreground">No participant identifiers are included.</p></div><StatusPill tone="neutral">{reportRows.length} current studies</StatusPill></div><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground"><tr>{["Study", "Phase / status", "Recruitment", "Ethics", "CTRI", "Open SAEs", "Safety signals", "Data completeness"].map((heading) => <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>)}</tr></thead><tbody>{reportRows.map((row) => <tr key={row.studyId} className="border-t border-border"><td className="px-4 py-3 font-semibold text-secondary">{row.studyId}<p className="mt-1 font-normal text-muted-foreground">{row.title}</p></td><td className="px-4 py-3">{row.phase}<p className="mt-1 text-muted-foreground">{row.status}</p></td><td className="px-4 py-3">{row.enrolled} / {row.target}<div className="mt-2 w-28"><ProgressBar value={Math.min(100, Math.round(row.enrolled / Math.max(row.target, 1) * 100))} /></div></td><td className="px-4 py-3">{row.ethics}</td><td className="px-4 py-3">{row.ctri}</td><td className="px-4 py-3">{row.openSaes}</td><td className="px-4 py-3">{row.openSafetySignals}</td><td className="px-4 py-3">{row.dataCompleteness}%</td></tr>)}</tbody></table></div></section>
       <p className="text-[11px] leading-5 text-muted-foreground">FHIR R4 download is not conformance-validated for ABDM exchange. CSV, JSON and XML are operational summaries, not validated SDTM, ADaM or Define-XML submissions. Review exports with qualified owners before regulatory use.</p>
     </div> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,.75fr)]"><section className="rounded-lg border border-border bg-surface p-6"><div className="flex size-10 items-center justify-center rounded-md bg-primary/8 text-primary">{data.icon}</div><h2 className="mt-5 font-display text-xl font-semibold">{data.heading}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{data.detail}</p><div className="mt-8 space-y-4">{["Protocol and source alignment", "Data quality verification", "Responsible owner review"].map((label, index) => <div key={label} className="flex items-center gap-4 border-t border-border pt-4"><span className="grid size-7 place-items-center rounded-full bg-muted text-xs font-semibold">0{index + 1}</span><span className="flex-1 text-sm font-medium">{label}</span><StatusPill tone={index === 0 ? "good" : index === 1 ? "warn" : "neutral"}>{index === 0 ? "Complete" : index === 1 ? "Review" : "Queued"}</StatusPill></div>)}</div></section><aside className="rounded-lg border border-border bg-muted/40 p-6"><FileText className="size-6 text-secondary" /><h2 className="mt-5 font-display text-base font-semibold">Latest activity</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">The evidence set was updated by Research Operations at 14:32 today. All changes remain traceable in the audit record.</p><Button variant="secondary" className="mt-6 w-full" onClick={() => toast.info("Latest document activity: protocol amendment v3.2 was logged at 14:32.")}>View activity<ArrowUpRight className="size-4" /></Button></aside></div>}
   </PlatformPage>;

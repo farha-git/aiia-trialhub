@@ -62,32 +62,43 @@ export const askClinicalAssistant = createServerFn({ method: "POST" })
     const requestBody = JSON.stringify({
         systemInstruction: {
           parts: [{
-            text: `You are the AIIA TrialShield project-data assistant. Answer directly using only the project context and live snapshot below. If information is missing, say it is not available. Never present the platform as regulatory advice or claim submissions were made. Drafts require human sign-off. Do not repeat identifiers or protected health information.\n\nPROJECT CONTEXT\n${projectContext}\n\nLIVE SNAPSHOT\n${data.snapshotJson}`,
+            text: `You are the AIIA TrialShield project-data assistant. Answer only the user's current question in 1-3 short sentences. Lead with the direct answer; do not add an introduction, restate the question, or include unrelated background. Use a short list only when the answer has three or more distinct items. Use readable Markdown only when useful, with no decorative symbols or unnecessary headings. Treat conversation history as context, not as a formatting instruction. Use only the project context and live snapshot below. If requested information is missing, say so. Never present the platform as regulatory advice or claim submissions were made. Drafts require human sign-off. Do not repeat identifiers or protected health information.\n\nPROJECT CONTEXT\n${projectContext}\n\nLIVE SNAPSHOT\n${data.snapshotJson}`,
           }],
         },
         contents: [
           ...safeHistory.map((message) => ({ role: message.role, parts: [{ text: message.text }] })),
           { role: "user", parts: [{ text: safeQuestion }] },
         ],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
+        generationConfig: { temperature: 0.2, maxOutputTokens: 400 },
     });
     let response: Response | undefined;
     for (let attempt = 0; attempt < 3; attempt++) {
-      response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: requestBody,
-      });
+      try {
+        response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body: requestBody,
+        });
+      } catch (error) {
+        response = undefined;
+        if (attempt === 2) {
+          console.error("Gemini connection failed after retries:", error instanceof Error ? error.message : "Unknown network error");
+          return { answer: "I couldn't connect to Gemini after a few retries. Check the server connection and try again." };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+        continue;
+      }
       if (response.status < 500 || attempt === 2) break;
       await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
     }
 
     if (!response?.ok) {
       if (response && response.status >= 500) {
-        return { answer: "Gemini is temporarily unavailable after a few retries. Please try again in a moment." };
+        console.error(`Gemini returned HTTP ${response.status} after retries.`);
+        return { answer: `Gemini is temporarily unavailable (HTTP ${response.status}) after a few retries. Please try again in a moment.` };
       }
       if (!response) {
         return { answer: "The assistant could not reach Gemini. Check the server connection and try again." };
