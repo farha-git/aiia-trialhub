@@ -6,6 +6,7 @@ export type Permission =
   | "studies:create"
   | "studies:update"
   | "enrollment:update"
+  | "consent:update"
   | "visits:update"
   | "safety:view"
   | "safety:create"
@@ -19,9 +20,9 @@ export type Permission =
   | "audit:view";
 
 export const permissionsByRole: Record<AppRole, readonly Permission[]> = {
-  ADMIN: ["users:manage", "studies:view", "studies:create", "studies:update", "enrollment:update", "visits:update", "safety:view", "safety:create", "safety:update", "compliance:view", "compliance:update", "analytics:view", "analytics:export", "documents:view", "documents:manage", "audit:view"],
-  PI: ["studies:view", "studies:create", "studies:update", "enrollment:update", "visits:update", "safety:view", "compliance:view", "analytics:view", "documents:view", "documents:manage", "audit:view"],
-  CRC: ["studies:view", "enrollment:update", "visits:update", "safety:view", "compliance:view", "analytics:view", "documents:view", "audit:view"],
+  ADMIN: ["users:manage", "studies:view", "studies:create", "studies:update", "enrollment:update", "consent:update", "visits:update", "safety:view", "safety:create", "safety:update", "compliance:view", "compliance:update", "analytics:view", "analytics:export", "documents:view", "documents:manage", "audit:view"],
+  PI: ["studies:view", "studies:create", "studies:update", "enrollment:update", "consent:update", "visits:update", "safety:view", "compliance:view", "analytics:view", "documents:view", "documents:manage", "audit:view"],
+  CRC: ["studies:view", "enrollment:update", "consent:update", "visits:update", "safety:view", "compliance:view", "analytics:view", "documents:view", "audit:view"],
   SAFETY_OFFICER: ["studies:view", "safety:view", "safety:create", "safety:update", "compliance:view", "analytics:view", "documents:view", "audit:view"],
   COMPLIANCE_OFFICER: ["studies:view", "safety:view", "compliance:view", "compliance:update", "analytics:view", "documents:view", "documents:manage", "audit:view"],
   DATA_MANAGER: ["studies:view", "safety:view", "compliance:view", "analytics:view", "analytics:export", "documents:view", "audit:view"],
