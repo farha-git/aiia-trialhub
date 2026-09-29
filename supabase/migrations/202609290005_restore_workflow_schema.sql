@@ -1,4 +1,4 @@
-create table if not exists public.compliance_items (
+77create table if not exists public.compliance_items (
   id text primary key,
   study_id text not null,
   title text not null,
