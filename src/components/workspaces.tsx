@@ -7,7 +7,6 @@ import {
   FileText,
   Filter,
   FolderOpen,
-  MoreHorizontal,
   Plus,
   Search,
   ShieldAlert,
@@ -1168,17 +1167,10 @@ export function UtilityWorkspace({ type }: { type: keyof typeof utilityContent }
       title={data.title}
       description={data.description}
       actions={
-        type === "exports" || type === "analytics" ? (
-          <Button onClick={downloadReport}>
-            <Download className="size-4" />
-            Download report
-          </Button>
-        ) : (
-          <Button variant="secondary" onClick={() => toast.info("Document options are available.")}>
-            <MoreHorizontal className="size-4" />
-            Options
-          </Button>
-        )
+        <Button onClick={downloadReport}>
+          <Download className="size-4" />
+          Download report
+        </Button>
       }
     >
       {type === "exports" || type === "analytics" ? (

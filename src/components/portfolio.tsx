@@ -95,7 +95,7 @@ export function PortfolioWorkspace() {
         action: string;
         href: string;
         actionDisabled: boolean;
-        onAction: () => void;
+        onAction?: () => void;
       }>;
       if (study.ethicsExpiresOn) {
         const deadline = calculateDeadline(
@@ -114,7 +114,6 @@ export function PortfolioWorkspace() {
             action: "Open",
             href: `/studies/${study.id}`,
             actionDisabled: false,
-            onAction: () => undefined,
           });
       }
       return alerts;
@@ -137,7 +136,7 @@ export function PortfolioWorkspace() {
         action: "Open",
         href: `/studies/${milestone.studyId}`,
         actionDisabled: false,
-        onAction: () => undefined,
+        onAction: undefined,
       };
     });
   const riskAlerts = openRisks.map((risk) => {
@@ -185,7 +184,7 @@ export function PortfolioWorkspace() {
           action: "Open",
           href: "/documents",
           actionDisabled: false,
-          onAction: () => undefined,
+          onAction: undefined,
         },
       ]
     : [];
